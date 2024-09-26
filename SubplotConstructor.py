@@ -6,6 +6,8 @@ from io import BytesIO
 from PIL import Image
 import base64
 
+from Plot import Plot, Subplot
+
 MIN_LINE = 50
 MIN_GAP = 5
 MIN_TICK_LEN = 5
@@ -32,16 +34,15 @@ class Axis:
         self.ticks = None
         self.labels = None
     
+    def set_labels(self, labels):
+        # Check the number of labels with the number of ticks
+        pass
+    
     def merge(self, axis):
         self.line_r_lo = min(self.line_r_lo, axis.line_r_lo)
         self.line_r_hi = max(self.line_r_hi, axis.line_r_hi)
         self.line_c_lo = min(self.line_c_lo, axis.line_c_lo)
         self.line_c_hi = max(self.line_c_hi, axis.line_c_hi)
-
-class Subplot:
-    def __init__(self, x, y):
-        self.x_axis = x
-        self.y_axis = y
 
 class SubplotConstructor:
     def __init__(self, api_key=None, organization=None):
@@ -53,6 +54,7 @@ class SubplotConstructor:
         for axis in potential_axes:
             if axis.line_r_hi - axis.line_r_lo > MAX_LINE_WIDTH:
                 continue
+            # Find the ticks with the same color on at least one side
             sting_pos = {}
             for i in range(axis.line_c_lo, axis.line_c_hi):
                 for j in range(axis.line_r_hi, image.shape[0]):
@@ -69,10 +71,8 @@ class SubplotConstructor:
                         if MIN_TICK_LEN < axis.line_r_lo - j - 1 < MAX_TICK_LEN:
                             sting_pos[i] = 1
                         break
-            if axis.line_r_lo == 902:
-                print(sting_pos.keys())
-            if len(sting_pos) == 1:
-                continue
+            
+            # Group continuous ticks and represent them with the middle point
             grouped_stings = []
             for sting in sorted(sting_pos.keys()):
                 if len(grouped_stings) == 0 or sting - grouped_stings[-1][-1] > MIN_GAP:
@@ -84,21 +84,18 @@ class SubplotConstructor:
                 if group[-1] - group[0] < MIN_GAP:
                     ticks.append((group[0] + group[-1]) / 2)
 
-            if axis.line_r_lo == 902:
-                print(grouped_stings)
-                print(ticks)
-
+            # Should have at least one tick
             if len(ticks) > 0:
                 axis.ticks = ticks
                 axes.append(axis)
         return axes
 
     def merge_straight_lines(self, image, potential_axes):
-        # Can this line be merged with an existing axis
         merged_lines = []
         for i in range(len(potential_axes)):
             merged = False
             for axis in merged_lines:
+                # Can this line be merged with an existing axis
                 if not np.array_equal(axis.color, potential_axes[i].color):
                     continue
                 to_merge = False
@@ -169,13 +166,17 @@ class SubplotConstructor:
                     cur_line_lo = j
                 j += 1
         potential_axes = self.merge_straight_lines(image, potential_axes)
-        
         axes = self.filter_axes(image, potential_axes)
+        if len(axes) == 0:
+            # If no axes with ticks are detected, return the straight lines
+            axes = potential_axes
+        
         if direction == "y":
             for axis in axes:
                 axis.line_c_lo, axis.line_c_hi = image.shape[1]-axis.line_c_hi, image.shape[1]-axis.line_c_lo
-                for i in range(len(axis.ticks)):
-                    axis.ticks[i] = image.shape[1] - axis.ticks[i]
+                if axis.ticks is not None:
+                    for i in range(len(axis.ticks)):
+                        axis.ticks[i] = image.shape[1] - axis.ticks[i]
             image = cv2.rotate(image, cv2.ROTATE_90_COUNTERCLOCKWISE)
         return axes
     
