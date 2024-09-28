@@ -8,35 +8,39 @@ class Curve:
         self.error_bars = error_bars
         self.curve_value = curve_value
 
-class DotPlot:
-    def __init__(self, x, y, subplot_value, has_error_bars):
+class Subplot:
+    def __init__(self, x, y, subplot_value, has_error_bars, value_direction):
         # This initialization will be called the LLM
         self.x_axis = x
         self.y_axis = y
         self.subplot_value = subplot_value
         self.has_error_bars = has_error_bars
+        self.value_direction = value_direction
+        self.curves = []
+    
+    def estimate(self, image):
+        raise NotImplementedError
+
+    def to_value(self):
+        raise NotImplementedError
+
+class DotPlot(Subplot):
+    def __init__(self, x, y, subplot_value, has_error_bars, value_direction):
+        super().__init__(x, y, subplot_value, has_error_bars, value_direction)
 
     def estimate(self, image):
-        pass
+        raise NotImplementedError
 
-class Histogram:
-    def __init__(self, x, y, subplot_value, has_error_bars):
-        # This initialization will be called the LLM
-        self.x_axis = x
-        self.y_axis = y
-        self.subplot_value = subplot_value
-        self.has_error_bars = has_error_bars
+class Histogram(Subplot):
+    def __init__(self, x, y, subplot_value, has_error_bars, value_direction):
+        super().__init__(x, y, subplot_value, has_error_bars, value_direction)
 
     def estimate(self, image):
-        pass
+        raise NotImplementedError
 
-class Continuous:
-    def __init__(self, x, y, subplot_value, has_error_bars):
-        # This initialization will be called the LLM
-        self.x_axis = x
-        self.y_axis = y
-        self.subplot_value = subplot_value
-        self.has_error_bars = has_error_bars
+class Continuous(Subplot):
+    def __init__(self, x, y, subplot_value, has_error_bars, value_direction):
+        super().__init__(x, y, subplot_value, has_error_bars, value_direction)
 
     def estimate(self, image):
-        pass
+        raise NotImplementedError
