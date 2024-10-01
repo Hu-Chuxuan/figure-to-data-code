@@ -46,8 +46,8 @@ class ImageCleaner:
         for i in range(img.shape[0]):
             for j in range(img.shape[1]):
                 self.clustered[i, j] = cluster_centers[color_idx[i, j]]
-        self.idx2color = color_idx
-        self.cluster_centers = np.array(cluster_centers)
+        self.color_idx = color_idx
+        self.idx2color = np.array(cluster_centers)
         self.idx2cnt = idx2cnt
     
     def build_neighbors(self):
