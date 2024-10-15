@@ -4,7 +4,8 @@ from io import BytesIO
 from PIL import Image
 import base64
 import argparse
-import csv
+import pandas as pd
+from io import StringIO
 
 digitization = '''
 You are given a picture of a plot or a table. Your task is to digitize the data from the picture and convert it into a CSV file. This involves extracting the data points, labels, and other relevant information from the picture and organizing them into a structured dataset. The goal is to create a digital representation of the data that can be easily analyzed, manipulated, and visualized by a computer program.
@@ -29,7 +30,7 @@ If the picture contains a plot,
         2. Then, for each data point, you should estimate the pixel position of the mean and the diameter of the error bars in pixel. 
         3. Finally, you should calculate the mean and the diameter of the error bars to convert them in the same unit as the axis based on the pixel positions.
         4. For example, in the plot, in y-axis, 0 is about 450 pixel, 0.05 is about 350 pixel. We can use the 0 as the reference point and the scale is 100 pixel for 0.05 unit. The pixel posititon of the mean of a data point is about (100, 420), the diameter of its error bar is about 40 pixels. Consider that the 0 in y-axis is in about 450 pixel and 0.05 is in about 350 pixel, the mean should be around 0 + (450 - 420) * (0.05 - 0) / 100 = 0.015 and the diameter should be 0.05 * 40 / 100 = 0.02".
-    For the dot plots or histograms, you should estimate all the data points in the plot. For the continuous plots, you should sample at least 50 points to estimate the curve. 
+    For the dot plots or histograms, you should estimate all the data points in the plot. For the continuous plots, you should sample at least 20 points to estimate the curve. You MUST NOT omit any data points. ALL data points MUST be explicitly included in the CSV file.
 
 You MUST use "```csv" and "```" to enclose the CSV-formatted data.
 
@@ -77,32 +78,36 @@ def digitize(image, api_key=None, organization=None):
     print("# of input tokens: ", response.usage.prompt_tokens)
     print("# of output tokens: ", response.usage.completion_tokens)
 
-    return response.choices[0].message.content
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Digitize a plot or a table from an image')
-    parser.add_argument('--image', type=str, help='Path to the image file')
-    parser.add_argument('--api', type=str, help='OpenAI API key')
-    parser.add_argument('--org', type=str, help='OpenAI organization')
-
-    args = parser.parse_args()
-
-    image = cv2.imread(args.image)
-    response = digitize(image, args.api, args.org)
-
-    csvs = []
+    response = response.choices[0].message.content
+    res = []
     pos = 0
     while pos < len(response):
         start = response.find("```csv", pos)
         if start == -1:
             break
         end = response.find("```", start+7)
-        csvs.append(response[start+7:end])
+        df = pd.read_csv(StringIO(response[start+7:end]))
+        res.append(df)
         pos = end + 3
-    for i, csv_str in enumerate(csvs):
-        # Write the CSV data to a csv file
-        with open(f'output_{i}.csv', 'w', newline='') as csvfile:
-            csvreader = csv.reader(csv_str.splitlines())
-            csvwriter = csv.writer(csvfile)
-            for row in csvreader:
-                csvwriter.writerow(row)
+
+    return res, response
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Digitize a plot or a table from an image')
+    parser.add_argument('--image', type=str, help='Path to the image file')
+    parser.add_argument("--output", type=str, help="Path to the output CSV file")
+    parser.add_argument('--api', type=str, help='OpenAI API key')
+    parser.add_argument('--org', type=str, help='OpenAI organization')
+
+    args = parser.parse_args()
+
+    image = cv2.imread(args.image)
+    res, response = digitize(image, args.api, args.org)
+    for i, res in enumerate(res):
+        if len(res) == 1:
+            res.to_csv(args.output, index=False)
+        else:
+            res.to_csv(f"{args.output[:-4]}-{i}.csv", index=False)
+    with open(f"{args.output[:-4]}.txt", "w") as f:
+        f.write(response)
+
