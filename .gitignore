@@ -1,3 +1,6 @@
 __pycache__/
 tmp.*
 tmp/
+*.csv
+*.txt
+*.png

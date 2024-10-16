@@ -3,7 +3,7 @@ from openai import OpenAI
 from io import BytesIO
 from PIL import Image
 import base64
-from Subplot import DotPlot
+from Locator.Subplot import DotPlot
 
 def encode_image(image):
     # use base64 to encode the cv2 image

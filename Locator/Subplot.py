@@ -24,23 +24,5 @@ class Subplot:
     def to_value(self):
         raise NotImplementedError
 
-class DotPlot(Subplot):
-    def __init__(self, x, y, subplot_value, has_error_bars, value_direction):
-        super().__init__(x, y, subplot_value, has_error_bars, value_direction)
 
-    def estimate(self, image):
-        raise NotImplementedError
 
-class Histogram(Subplot):
-    def __init__(self, x, y, subplot_value, has_error_bars, value_direction):
-        super().__init__(x, y, subplot_value, has_error_bars, value_direction)
-
-    def estimate(self, image):
-        raise NotImplementedError
-
-class Continuous(Subplot):
-    def __init__(self, x, y, subplot_value, has_error_bars, value_direction):
-        super().__init__(x, y, subplot_value, has_error_bars, value_direction)
-
-    def estimate(self, image):
-        raise NotImplementedError
