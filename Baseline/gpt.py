@@ -13,26 +13,27 @@ You are given a picture of a plot or a table. Your task is to digitize the data 
 To do this, you will first identify whether the picture contains a plot or a table. 
 
 If the picture contains a table, 
-    1. In the headers, you only need to preserve the minimum amount of information to identify the columns and rows. 
+    1. In the column headers and row headers, we only want minimum amount of information to identify the columns and rows. Also, you should only have one column for the row headers and one row for the column headers. If you MUST contain the panel names or something to distinguish the row or column, concate the information with dash. For example, if the row header is "A" and the panel name is "1", you should use "A - 1" as the row header instead of using two columns.
     2. If a cell contains multiple statistics, you need to split them into separate **columns**. The column of the coefficient should be the same as the original name, while the rest should append the indices "(1)", "(2)", etc. Since we are generating a CSV file, you should use separate COLUMNs to represent the statistics INSTEAD OF ROWs. Therefore, you shoud first count the maximum number of statistics in a column and then determine the number of columns you need to split for each column.
-    3. If the statistics are wrapped in parentheses, you should remove the parentheses and keep the statistics as they are.
+    3. If the statistics are wrapped in parentheses, you should remove the parentheses and keep the statistics as they are. For the numbers separated by a comma, you should remove the comma and keep the numbers as they are.
     4. If a cell contains a statistic significance marker, you should remain the marker as it is. DO NOT convert the statistic significance to p-values. The marker should be attached in the same cell as the statistic it refers to.
-    5. For all special characters, you should represent them as the LaTeX notation. You MUST NOT separate the statistic significance marker with the coefficients. 
-    6. You MUST reserve the structure of the table in the image, which means that you CANNOT transpose the table or rearrange the orders. You can only split the table into multiple CSV files if there are multiple panels with different headers. Also, all cells MUST be quoted. 
+    5. For all special characters, you should represent them as the LaTeX notation. You MUST NOT separate the statistic significance marker with the coefficients. For the control variable checkmark, you should use 1 to represent the selected controls and 0 to represent the unselected controls. The control variable checkmark might be in different formats, for example "Yes", "\checkmark", "X", etc. You should convert all of them to 0/1.
+    6. You MUST reserve the structure of the table in the image, which means that you CANNOT transpose the table or rearrange the orders. You can only split the table into multiple CSV files if there are multiple different headers. If there are multiple panels sharing the same header, DO NOT split them. 
 
 If the picture contains a plot, 
-    You output should follow the following format:
-        1. You should use "Type-{}" as the column name for the independent variables. For example, in a plot with independent axis labels and multiple curves, you should use "Type-1" to represent the independent axis labels and "Type-2" for the curve labels. If the plot has only one curve or only one x-axis label, you should use "Type-1" to refer to the one independent variable.
-        2. You should use "Value" as the column name for the dependent variable and "Subplot Value" as the column names for the different subplots.
-        3. If the plot has error bars, you should include "Error Bar Length" as the column name for the error values. 
-    To estimate the data points in a quantitative way, you shoud use pixel coordinates to calculate the data points. 
-        1. First, you should identify the pixel positions of the ticks on the axis. With these pixel positions, you can have a reference point and the scale of the axis to convert the pixel positions to the actual values.
-        2. Then, for each data point, you should estimate the pixel position of the mean and the diameter of the error bars in pixel. 
-        3. Finally, you should calculate the mean and the diameter of the error bars to convert them in the same unit as the axis based on the pixel positions.
-        4. For example, in the plot, in y-axis, 0 is about 450 pixel, 0.05 is about 350 pixel. We can use the 0 as the reference point and the scale is 100 pixel for 0.05 unit. The pixel posititon of the mean of a data point is about (100, 420), the diameter of its error bar is about 40 pixels. Consider that the 0 in y-axis is in about 450 pixel and 0.05 is in about 350 pixel, the mean should be around 0 + (450 - 420) * (0.05 - 0) / 100 = 0.015 and the diameter should be 0.05 * 40 / 100 = 0.02".
-    For the dot plots or histograms, you should estimate all the data points in the plot. For the continuous plots, you should sample at least 20 points to estimate the curve. You MUST NOT omit any data points. ALL data points MUST be explicitly included in the CSV file.
+    1. Your output should follow the following format:
+        1) You should use "Type-{}" as the column name for the independent variables. For example, in a plot with independent axis labels and multiple curves, you should use "Type-1" to represent the independent axis labels and "Type-2" for the curve labels. If the plot has only one curve or only one x-axis label, you should use "Type-1" to refer to the one independent variable.
+        2) You should use "Value" as the column name for the dependent variable and "Subplot Value" as the column names for the different subplots. Since the subplots are special, you MUST AVOID using the "Type-{}" reference to represent the subplots.
+        3) If the plot has error bars, you should include "Error Bar Length" as the column name for the error values. 
+    2. To estimate the data points in a quantitative way, you shoud use pixel coordinates to calculate the data points. 
+        1) First, you should identify the pixel positions of the ticks on the axis. With these pixel positions, you can have a reference point and the scale of the axis to convert the pixel positions to the actual values.
+        2) Then, for each data point, you should estimate the pixel position of the mean and the diameter of the error bars in pixel. 
+        3) Finally, you should calculate the mean and the diameter of the error bars to convert them in the same unit as the axis based on the pixel positions.
+        4) For example, in the plot, in y-axis, 0 is about 450 pixel, 0.05 is about 350 pixel. We can use the 0 as the reference point and the scale is 100 pixel for 0.05 unit. The pixel posititon of the mean of a data point is about (100, 420), the diameter of its error bar is about 40 pixels. Consider that the 0 in y-axis is in about 450 pixel and 0.05 is in about 350 pixel, the mean should be around 0 + (450 - 420) * (0.05 - 0) / 100 = 0.015 and the diameter should be 0.05 * 40 / 100 = 0.02".
+    3. For the dot plots or histograms, you should estimate all the data points in the plot. For the continuous plots, you should sample at least 20 points to estimate the curve. You MUST NOT omit any data points. ALL data points MUST be explicitly included in the CSV file.
+    4. Note that we rely on the values in columns "Type-{}" and "Subplot Value" to distinguish the different data points and subplots. You MUST use these columns to represent the data points uniquely in a CSV file. You should only output one CSV file for the plot. 
 
-You MUST use "```csv" and "```" to enclose the CSV-formatted data.
+You MUST use "```csv" and "```" to enclose the CSV-formatted data. Given the feature of CSV files, you MUST pay attention to the limitation of the CSV format. For example, you MUST NOT add any spaces after the commas in the CSV file. Also, if a cell contains a comma, you MUST wrap the cell with double quotes.
 
 Let's think step by step. 
 '''
@@ -103,11 +104,11 @@ if __name__ == "__main__":
 
     image = cv2.imread(args.image)
     res, response = digitize(image, args.api, args.org)
-    for i, res in enumerate(res):
+    for i, df in enumerate(res):
         if len(res) == 1:
-            res.to_csv(args.output, index=False)
+            df.to_csv(args.output, index=False)
         else:
-            res.to_csv(f"{args.output[:-4]}-{i}.csv", index=False)
+            df.to_csv(f"{args.output[:-4]}-{i}.csv", index=False)
     with open(f"{args.output[:-4]}.txt", "w") as f:
         f.write(response)
 
