@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from scipy.interpolate import interp1d
+import re
 
 def is_pair(pred_row, gt_row):
     if "Subplot Value" in gt_row and pred_row["Subplot Value"] != gt_row["Subplot Value"]:
@@ -68,6 +69,15 @@ def evaluate_discrete_plot(pred_df, gt_df):
         gt_df = gt_df[0]
     else:
         raise ValueError("The number of predicted data and the ground truth data is more than 1.")
+    # Check they have the same header
+    if len(pred_df.columns) != len(gt_df.columns):
+        raise ValueError("The number of columns in the predicted data and the ground truth data is different.")
+    gt_header = sorted(gt_df.columns)
+    pred_header = sorted(pred_df.columns)
+    for i in range(len(gt_header)):
+        if gt_header[i] != pred_header[i]:
+            raise ValueError("The header of the predicted data and the ground truth data is different.")
+    
     pred_value, gt_value, pred_error, gt_error = pair_data_points(pred_df, gt_df)
     perf = {}
     perf["Value performance"] = cal_perf(pred_value, gt_value)
@@ -156,5 +166,78 @@ def evaluate_continuous_plot(pred_df, gt_df):
         perf["Overall performance"] = cal_perf(new_pred_y + new_pred_err, new_gt_y + new_gt_err)
     return perf
 
-def evaluate_table(pred_df, gt_df):
-    pass
+def is_repeat(value, repeat):
+    if len(repeat) == 0 or len(value) % len(repeat) != 0:
+        return False
+    for i in range(1, len(value)//len(repeat)):
+        if value != repeat * i:
+            return False
+    return True
+
+def parse_digit_from_sig(value):
+    digit = ""
+    for ch in value:
+        if ch == ".":
+            if "." not in digit:
+                digit += "."
+            else:
+                break
+        elif ch.isdigit():
+            digit += ch
+        elif ch == "-" and len(digit) == 0:
+            digit += "-"
+        else:
+            break
+    if len(digit) == 0:
+        return None, None
+    if len(digit) == len(value):
+        return digit, 0
+    # find repeat in value[len(digit):]
+    repeat = ""
+    value = value[len(digit):]
+    if "{" in value and "}" in value:
+        repeat = value[value.find("{")+1:value.find("}")]
+    for ch in value:
+        if not is_repeat(value, repeat):
+            repeat += ch
+        else:
+            break
+    return digit, len(value) // len(repeat)
+
+def evaluate_table(pred_dfs, gt_dfs):
+    if len(pred_dfs) != len(gt_dfs):
+        raise ValueError("The number of predicted data and the ground truth data is different.")
+    
+    same = 0
+    total = 0
+    
+    for df_ptr in range(len(pred_dfs)):
+        pred_df = pred_dfs[df_ptr]
+        gt_df = gt_dfs[df_ptr]
+
+        for i in range(len(gt_df.columns)):
+            for j in range(len(gt_df)):
+                if type(gt_df.iloc[j][i]) != str:
+                    if type(pred_df.iloc[j][i]) != str and (pred_df.iloc[j][i] == gt_df.iloc[j][i] or (np.isnan(pred_df.iloc[j][i]) and np.isnan(gt_df.iloc[j][i]))):
+                        same += 1
+                    else:
+                        print("Mismatch: ", gt_df.columns[i], j, pred_df.iloc[j][i], gt_df.iloc[j][i], type(pred_df.iloc[j][i]), type(gt_df.iloc[j][i]))
+                    total += 1
+                else:
+                    gt_digit, gt_repeat = parse_digit_from_sig(gt_df.iloc[j][i])
+                    pred_digit, pred_repeat = parse_digit_from_sig(pred_df.iloc[j][i])
+                    try:
+                        gt_digit = float(gt_digit)
+                    except:
+                        print("Not a data point ", gt_df.columns[i], j, gt_df.iloc[j][i])
+                        continue
+                    total += 1
+                    try:
+                        pred_digit = float(pred_digit)
+                    except:
+                        print("Mismatch after parsing: ", gt_df.columns[i], j, pred_digit, gt_digit, pred_repeat, gt_repeat)
+                        continue
+                    if pred_digit == gt_digit and pred_repeat == gt_repeat:
+                        same += 1
+    print("same: ", same, "total: ", total)
+    return same / total

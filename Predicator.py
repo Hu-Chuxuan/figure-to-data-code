@@ -4,7 +4,7 @@ import argparse
 import pandas as pd
 
 from Baseline.gpt import digitize
-from Evaluator import evaluate_plot
+from Evaluator import evaluate_discrete_plot, evaluate_continuous_plot, evaluate_table
 
 parser = argparse.ArgumentParser(description='Digitize a plot or a table from an image')
 parser.add_argument('--root', type=str, help='Path to the image file')
@@ -14,38 +14,36 @@ parser.add_argument('--org', type=str, help='OpenAI organization')
 args = parser.parse_args()
 
 class Dataset:
-    def __init__(self, root, types):
+    def __init__(self, root, types, paper_list=None):
         self.samples = []
-        cur_path = root
-        queue = [cur_path]
-        while len(queue) > 0:
-            cur_path = queue.pop(0)
-            if os.path.isfile(cur_path):
-                if not cur_path.endswith(".csv") and cur_path[cur_path.rfind("/")+1] in types:
-                    self.samples.append(cur_path)
-            else:
-                files = os.listdir(cur_path)
-                for file in files:
-                    queue.append(os.path.join(cur_path, file))
+        if paper_list is None:
+            paper_list = os.listdir(root)
+        for paper in paper_list:
+            samples = os.listdir(os.path.join(root, paper))
+            for sample in samples:
+                if sample[0] in types and (sample.endswith(".png") or sample.endswith(".jpeg")):
+                    self.samples.append((os.path.join(root, paper, sample), sample[:sample.rfind(".")]))
     
     def __len__(self):
         return len(self.samples)
     
     def __getitem__(self, idx):
-        path = self.samples[idx]
+        path, name = self.samples[idx]
         img = cv2.imread(path)
         gts = []
-        name = path[path.rfind("/")+1:path.rfind(".")]
         path = path[:path.rfind("/")]
-        files = os.listdir(path)
+        files = sorted(os.listdir(path))
         for file in files:
             if name in file and file.endswith(".csv"):
                 gts.append(pd.read_csv(os.path.join(path, file)))
         return img, name, gts
 
-dataset = Dataset(args.root, ["P"])
+# val_papers = ["2", "10", "14", "16", "17", "20", "79", "104"]
+val_papers = ["2"]
+dataset = Dataset(args.root, ["P", "T"], val_papers)
 for i in range(len(dataset)):
     img, file_name, gts = dataset[i]
+    print("===================", file_name, "===================")
     res, response = digitize(img, args.api, args.org)
     for i, df in enumerate(res):
         if len(res) == 1:
@@ -54,6 +52,9 @@ for i in range(len(dataset)):
             df.to_csv(os.path.join(args.output, f"{file_name}-{i}.csv"), index=False)
     with open(os.path.join(args.output, file_name+".txt"), "w") as f:
         f.write(response)
-    perf = evaluate_plot(res, gts)
-    with open(os.path.join(args.output, file_name+".json"), "w") as f:
-        f.write(perf)
+    if file_name[0] == "P":
+        perf = evaluate_discrete_plot(res, gts)
+    else:
+        perf = evaluate_table(res, gts)
+    print(file_name, perf)
+    input("Press Enter to continue...")
