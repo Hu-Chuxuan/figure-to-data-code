@@ -30,8 +30,13 @@ If the picture contains a plot,
         2) Then, for each data point, you should estimate the pixel position of the mean and the diameter of the error bars in pixel. 
         3) Finally, you should calculate the mean and the diameter of the error bars to convert them in the same unit as the axis based on the pixel positions.
         4) For example, in the plot, in y-axis, 0 is about 450 pixel, 0.05 is about 350 pixel. We can use the 0 as the reference point and the scale is 100 pixel for 0.05 unit. The pixel posititon of the mean of a data point is about (100, 420), the diameter of its error bar is about 40 pixels. Consider that the 0 in y-axis is in about 450 pixel and 0.05 is in about 350 pixel, the mean should be around 0 + (450 - 420) * (0.05 - 0) / 100 = 0.015 and the diameter should be 0.05 * 40 / 100 = 0.02".
-    3. For the dot plots or histograms, you should estimate all the data points in the plot. For the continuous plots, you should sample at least 20 points to estimate the curve. You MUST NOT omit any data points. ALL data points MUST be explicitly included in the CSV file.
-    4. Note that we rely on the values in columns "Type-{}" and "Subplot Value" to distinguish the different data points and subplots. You MUST use these columns to represent the data points uniquely in a CSV file. You should only output one CSV file for the plot. 
+    3. For the subplots, you shoud use their titles to represent them. For example, if the title of a subplot is "A. Random Subplot", you should use "Random Subplot" as the "Subplot Value". If the title is "B", you should use "B" as the "Subplot Value". If there is no title, you should use "1", "2", "3", etc. to represent the subplots. 
+    4. There are some special rules for the histograms where each bar represents a range, 
+        1) By representing a range, we mean that the bars are not a one-to-one mapping from the ticks on the axis. For example, if the x-axis is from 0 to 1 with 10 ticks being 0, 0.1, 0.2, ..., 1, the bars in the histogram are not on the ticks, but they span between the ticks.
+        2) You MUST estimate the start point and end point of the range for each bar and using "{start point} - {end point}" to represent the range as one independent variable instead of using them as two independent variables. If each bar only represents one value, you should use the value as the individual variables.
+        3) If a range does not have a visible bar, you MUST NOT output the range with value 0 in the CSV file. 
+    5. For the dot plots or histograms, you should estimate all the data points in the plot. For the continuous plots, you should sample at least 20 points to estimate the curve. You MUST NOT omit any data points. ALL data points MUST be explicitly included in the CSV file.
+    6. Note that we rely on the values in columns "Type-{}" and "Subplot Value" to distinguish the different data points and subplots. You MUST use these columns to represent the data points uniquely in a CSV file. You should only output one CSV file for the plot. 
 
 You MUST use "```csv" and "```" to enclose the CSV-formatted data. Given the feature of CSV files, you MUST pay attention to the limitation of the CSV format. For example, you MUST NOT add any spaces after the commas in the CSV file. Also, if a cell contains a comma, you MUST wrap the cell with double quotes.
 
@@ -75,21 +80,24 @@ def digitize(image, api_key=None, organization=None):
         top_p=1,
     )
     print(response.choices[0].message.content)
-    print(response.choices[0].message.function_call)
     print("# of input tokens: ", response.usage.prompt_tokens)
     print("# of output tokens: ", response.usage.completion_tokens)
 
     response = response.choices[0].message.content
     res = []
     pos = 0
-    while pos < len(response):
-        start = response.find("```csv", pos)
-        if start == -1:
-            break
-        end = response.find("```", start+7)
-        df = pd.read_csv(StringIO(response[start+7:end]))
-        res.append(df)
-        pos = end + 3
+    try:
+        while pos < len(response):
+            start = response.find("```csv", pos)
+            if start == -1:
+                break
+            end = response.find("```", start+7)
+            df = pd.read_csv(StringIO(response[start+7:end]))
+            res.append(df)
+            pos = end + 3
+    except pd.errors.ParserError as e:
+        print(e)
+        return None, response
 
     return res, response
 
