@@ -3,6 +3,19 @@ import pandas as pd
 from scipy.interpolate import interp1d
 import re
 
+YELLOW = '\033[93m'
+BLUE = '\033[94m'
+MAGENTA = '\033[95m'
+RESET = '\033[0m'
+
+class WrongCSVNumberError(Exception):
+    def __init__(self, pred_num, gt_num):
+        super().__init__(YELLOW + f"The number of predicted CSV files is {pred_num} when the ground truth has {gt_num} CSV files." + RESET)
+
+class FormatError(Exception):
+    def __init__(self, msg):
+        super().__init__(YELLOW + msg + RESET)
+
 '''
 @description: if the string is in the format of "start - end" where start and end are two numbers, 
               we can parse the start and end values
@@ -36,7 +49,6 @@ def pair_score(pred, gt):
             return min(abs(gt_start - pred_start), abs(gt_end - pred_end))
         return 0 if gt == pred else np.inf
     return abs(gt - pred)
-
 
 '''
 @params:
@@ -131,8 +143,6 @@ def pair_string(pred_str, gt_str):
     type2_gt2pred: Dict, mapping a type2 value in the ground truth data to a type2 value in the predicted data
 '''
 def pair_curves(pred_curves, gt_curves):
-    if len(pred_curves) != len(gt_curves):
-        raise ValueError("The number of curves in the predicted data and the ground truth data is different.")
     gt_subplots = set([subplot for subplot, _ in gt_curves.keys()])
     gt_type2s = set([type2 for _, type2 in gt_curves.keys()])
     pred_subplots = set([subplot for subplot, _ in pred_curves.keys()])
@@ -173,12 +183,20 @@ def interpolate(pred_x, pred_y, gt_x, gt_y):
     gt_y_common = gt_interp(x_common)
     return x_common, pred_y_common, gt_y_common
 
+'''
+@raise: 
+    WrongCSVNumberError: the number of predicted CSV files is different from the number of ground truth CSV files
+    FormatError: the predicted CSV file has an invalid column (valid columns are "Value", "Subplot Value", and "Type-{}")
+'''
 def evaluate_plot(pred_df, gt_df):
     if len(pred_df) == 1 and len(gt_df) == 1:
         pred_df = pred_df[0]
         gt_df = gt_df[0]
     else:
-        raise ValueError("The number of predicted data and the ground truth data is more than 1.")
+        raise WrongCSVNumberError(len(pred_df), len(gt_df))
+    for col in pred_df.columns:
+        if col != "Value" and col != "Subplot Value" and not re.match(r"Type-\d+", col):
+            raise FormatError(f"The column {col} in the predicted CSV file is not a valid column.")
     
     pred_curves = separate_curve(pred_df)
     gt_curves = separate_curve(gt_df)
@@ -191,13 +209,17 @@ def evaluate_plot(pred_df, gt_df):
     discrete_generated = 0
     for subplot, type2 in gt_curves.keys():
         gt_curve = gt_curves[(subplot, type2)]
+        if subplot not in subplot_gt2pred or type2 not in type2_gt2pred:
+            if len(gt_curve["x"]) < 50:
+                discrete_total += len(gt_curve["x"])
+            continue
         pred_curve = pred_curves[(subplot_gt2pred[subplot], type2_gt2pred[type2])]
         if len(gt_curve["x"]) >= 50:
             # This is a continuous plot
-            _, pred_y_resample, gt_y_resample = interpolate(pred_curve["x"], pred_curve["y"], gt_curve["x"], gt_curves["y"])
+            _, pred_y_resample, gt_y_resample = interpolate(pred_curve["x"], pred_curve["y"], gt_curve["x"], gt_curve["y"])
             new_pred_y.extend(pred_y_resample)
             new_gt_y.extend(gt_y_resample)
-            if len(gt_curve["err"]) > 0:
+            if "err" in gt_curve.keys() and len(gt_curve["err"]) > 0:
                 _, pred_err_resample, gt_err_resample = interpolate(pred_curve["x"], pred_curve["err"], gt_curve["x"], gt_curve["err"])
                 new_pred_err.extend(pred_err_resample)
                 new_gt_err.extend(gt_err_resample)
@@ -209,18 +231,23 @@ def evaluate_plot(pred_df, gt_df):
             discrete_identified += len(gt_value)
             discrete_total += len(gt_curve["x"])
             discrete_generated += len(pred_curve["x"])
+            print("Identified: ", len(gt_value), "Total: ", len(gt_curve["x"]), "Generated: ", len(pred_curve["x"]))
             if pred_error is not None:
                 new_pred_err.extend(pred_error)
                 new_gt_err.extend(gt_error)
     
     perf = {}
-    perf["Value performance"] = cal_perf(new_pred_y, new_gt_y)
+    if len(new_gt_y) > 0:
+        perf["Value performance"] = cal_perf(new_pred_y, new_gt_y)
     if len(new_gt_err) > 0:
         perf["Error performance"] = cal_perf(new_pred_err, new_gt_err)
         perf["Overall performance"] = cal_perf(new_pred_y + new_pred_err, new_gt_y + new_gt_err)
     if discrete_total > 0:
         perf["Identified rate"] = discrete_identified / discrete_total
-        perf["Identified recall"] = discrete_identified / discrete_generated
+        if discrete_generated > 0:
+            perf["Identified recall"] = discrete_identified / discrete_generated
+        else:
+            perf["Identified recall"] = np.nan
     return perf
 
 def is_repeat(value, repeat):
@@ -246,17 +273,27 @@ def parse_digit_from_sig(value):
     repeat = ""
     value = value[len(digit):]
     if "{" in value and "}" in value:
-        repeat = value[value.find("{")+1:value.find("}")]
+        value = value[value.find("{")+1:value.find("}")]
     for ch in value:
         if not is_repeat(value, repeat):
             repeat += ch
         else:
             break
-    return digit, len(value) // len(repeat)
+    repeat_cnt = len(value) // len(repeat)
+    if repeat_cnt == 1:
+        # if a space is in the repeat, or it contain both digits and letters, we do not consider it as a valid repeat
+        if " " in repeat or (re.search(r'\d', repeat) and re.search(r'\D', repeat)):
+            return None, None
+    return digit, repeat_cnt
 
+'''
+@raise:
+    WrongCSVNumberError: the number of predicted CSV files is different from the number of ground truth CSV files
+    FormatError: the number of columns in the predicted data and the ground truth data are different
+'''
 def evaluate_table(pred_dfs, gt_dfs):
     if len(pred_dfs) != len(gt_dfs):
-        raise ValueError("The number of predicted data and the ground truth data is different.")
+        raise WrongCSVNumberError(len(pred_dfs), len(gt_dfs))
     
     same = 0
     total = 0
@@ -265,13 +302,23 @@ def evaluate_table(pred_dfs, gt_dfs):
         pred_df = pred_dfs[df_ptr]
         gt_df = gt_dfs[df_ptr]
 
+        if len(pred_df.columns) != len(gt_df.columns):
+            raise FormatError(f"The predicted CSV file has {len(pred_df.columns)} columns while the ground truth CSV file has {len(gt_df.columns)} columns.")
+
         for i in range(len(gt_df.columns)):
             for j in range(len(gt_df)):
                 if type(gt_df.iloc[j][i]) != str:
                     if type(pred_df.iloc[j][i]) != str and (pred_df.iloc[j][i] == gt_df.iloc[j][i] or (np.isnan(pred_df.iloc[j][i]) and np.isnan(gt_df.iloc[j][i]))):
                         same += 1
                     else:
-                        print("Mismatch: ", gt_df.columns[i], j, pred_df.iloc[j][i], gt_df.iloc[j][i], type(pred_df.iloc[j][i]), type(gt_df.iloc[j][i]))
+                        try:
+                            pred_digit = float(pred_df.iloc[j][i])
+                            if pred_digit == gt_df.iloc[j][i]:
+                                same += 1
+                            else:
+                                print(BLUE + "Value mismatch: ", gt_df.columns[i], j, pred_df.iloc[j][i], gt_df.iloc[j][i], type(pred_df.iloc[j][i]), type(gt_df.iloc[j][i]), RESET)
+                        except:
+                            print(MAGENTA + "Type mismatch: ", gt_df.columns[i], j, pred_df.iloc[j][i], gt_df.iloc[j][i], type(pred_df.iloc[j][i]), type(gt_df.iloc[j][i]), RESET)
                     total += 1
                 else:
                     gt_digit, gt_repeat = parse_digit_from_sig(gt_df.iloc[j][i])
@@ -289,11 +336,11 @@ def evaluate_table(pred_dfs, gt_dfs):
                     try:
                         pred_digit = float(pred_digit)
                     except:
-                        print("Mismatch after parsing: ", gt_df.columns[i], j, pred_digit, gt_digit, pred_repeat, gt_repeat)
+                        print(MAGENTA + "Type mismatch: ", gt_df.columns[i], j, pred_digit, gt_digit, pred_repeat, gt_repeat, RESET)
                         continue
                     if pred_digit == gt_digit and pred_repeat == gt_repeat:
                         same += 1
                     else:
-                        print("Mismatch: ", gt_df.columns[i], j, pred_df.iloc[j][i], gt_df.iloc[j][i], pred_digit, gt_digit, pred_repeat, gt_repeat)
+                        print(BLUE + "Value mismatch: ", gt_df.columns[i], j, pred_df.iloc[j][i], gt_df.iloc[j][i], pred_digit, gt_digit, pred_repeat, gt_repeat, RESET)
     print("same: ", same, "total: ", total)
     return same / total
