@@ -40,15 +40,29 @@ def parse_range(value):
 @return: the score of the pair. np.inf if the two values are completely different strings
 '''
 def pair_score(pred, gt):
-    if type(gt) == str and type(pred) == str:
+    if type(pred) != type(gt):
+        if type(gt) != str:
+            try:
+                pred = float(pred)
+            except:
+                pred = str(pred)
+                gt = str(gt)
+        else:
+            pred = str(pred)
+    
+    if type(gt) == str:
         gt_start, gt_end = parse_range(gt)
         if gt_start is not None and gt_end is not None:
             pred_start, pred_end = parse_range(pred)
             if pred_start is None and pred_end is None:
-                return np.inf
-            return min(abs(gt_start - pred_start), abs(gt_end - pred_end))
-        return 0 if gt == pred else np.inf
-    return abs(gt - pred)
+                return np.inf, []
+            return min(abs(gt_start - pred_start), abs(gt_end - pred_end)), [(gt_start, pred_start), (gt_end, pred_end)]
+        return 0 if gt == pred else np.inf, []
+    if gt == None:
+        if pred == None:
+            return 0, []
+        return np.inf, []
+    return abs(gt - pred), [(gt, pred)]
 
 '''
 @params:
@@ -59,6 +73,7 @@ def pair_score(pred, gt):
     gt: List, ground truth values or error bars
 '''
 def pair_data_points(pred_curve, gt_curve):
+    pred_x, gt_x = [], []
     pred_value, gt_value = [], []
     if "err" in gt_curve.keys():
         pred_error, gt_error = [], []
@@ -69,20 +84,27 @@ def pair_data_points(pred_curve, gt_curve):
     for i in range(len(gt_curve["x"])):
         best_score = np.inf
         best_j = np.inf
+        best_x_pairs = []
         for j in range(len(pred_curve["x"])):
-            if not pred_paired[j]:
-                score = pair_score(pred_curve["x"][j], gt_curve["x"][i])
-                if score < best_score:
-                    best_score = score
-                    best_j = j
-        if best_j != np.inf:
+            if pred_paired[j]:
+                continue
+            score, x_pairs = pair_score(pred_curve["x"][j], gt_curve["x"][i])
+            if score < best_score:
+                best_score = score
+                best_j = j
+                best_x_pairs = x_pairs
+        if best_score < np.inf:
+            if len(best_x_pairs) > 0:
+                for gt, pred in best_x_pairs:
+                    pred_x.append(pred)
+                    gt_x.append(gt)
             pred_value.append(pred_curve["y"][best_j])
             gt_value.append(gt_curve["y"][i])
             pred_paired[best_j] = True
             if pred_error is not None:
                 pred_error.append(pred_curve["err"][best_j])
                 gt_error.append(gt_curve["err"][i])
-    return pred_value, gt_value, pred_error, gt_error
+    return {"x": pred_x, "y": pred_value, "err": pred_error}, {"x": gt_x, "y": gt_value, "err": gt_error}
 
 '''
 @description: Separate the data points into different curves based on the subplot and the type-2 value
@@ -115,26 +137,6 @@ def separate_curve(df):
     return curves
 
 '''
-@description: determine how can we pair the strings in the two lists
-@params:
-    pred_str: List, the strings in the predicted data
-    gt_str: List, the strings in the ground truth data
-@return:
-    a dictionary of the paired strings mapping from a string in the ground truth data to a string in the predicted data
-@note: if we want more advanced string matching, we can replace the ``gt.lower() == pred.lower()`` with a new algorithm, e.g. editing distance and select the best match. 
-'''
-def pair_string(pred_str, gt_str):
-    gt2pred = {}
-    paired = [False] * len(pred_str)
-    for gt in gt_str:
-        for i, pred in enumerate(pred_str):
-            if not paired[i] and ((gt == None and pred == None) or (gt != None and pred != None and gt.lower() == pred.lower())):
-                gt2pred[gt] = pred
-                paired[i] = True
-                break
-    return gt2pred
-
-'''
 @params:
     pred_curves: Dict, (subplot, type2) -> curve
     gt_curves: Dict, (subplot, type2) -> curve
@@ -143,15 +145,27 @@ def pair_string(pred_str, gt_str):
     type2_gt2pred: Dict, mapping a type2 value in the ground truth data to a type2 value in the predicted data
 '''
 def pair_curves(pred_curves, gt_curves):
-    gt_subplots = set([subplot for subplot, _ in gt_curves.keys()])
-    gt_type2s = set([type2 for _, type2 in gt_curves.keys()])
-    pred_subplots = set([subplot for subplot, _ in pred_curves.keys()])
-    pred_type2s = set([type2 for _, type2 in pred_curves.keys()])
-    
-    subplot_gt2pred = pair_string(pred_subplots, gt_subplots)
-    type2_gt2pred = pair_string(pred_type2s, gt_type2s)
+    paired_gt_curves, paired_pred_curves = [], []
+    paired = {}
+    for subplot_gt, type2_gt in gt_curves.keys():
+        best_score = np.inf
+        best_subplot_pred, best_type2_pred = None, None
+        for subplot_pred, type2_pred in pred_curves.keys():
+            if (subplot_pred, type2_pred) in paired:
+                continue
+            subplot_score, _ = pair_score(subplot_pred, subplot_gt)
+            type2_score, _ = pair_score(type2_pred, type2_gt)
+            score = subplot_score + type2_score
+            if score < best_score:
+                best_score = score
+                best_subplot_pred = subplot_pred
+                best_type2_pred = type2_pred
+        if best_score < np.inf:
+            paired[(best_subplot_pred, best_type2_pred)] = (subplot_gt, type2_gt)
+            paired_gt_curves.append(gt_curves[(subplot_gt, type2_gt)])
+            paired_pred_curves.append(pred_curves[(best_subplot_pred, best_type2_pred)])
 
-    return subplot_gt2pred, type2_gt2pred
+    return paired_pred_curves, paired_gt_curves
 
 def cal_perf(pred_values, gt_values):
     print(len(pred_values), len(gt_values))
@@ -195,53 +209,58 @@ def evaluate_plot(pred_df, gt_df):
     else:
         raise WrongCSVNumberError(len(pred_df), len(gt_df))
     for col in pred_df.columns:
-        if col != "Value" and col != "Subplot Value" and not re.match(r"Type-\d+", col):
+        if col not in ["Value", "Subplot Value", "Error Bar Length"] and not re.match(r"Type-\d+", col):
             raise FormatError(f"The column {col} in the predicted CSV file is not a valid column.")
     
     pred_curves = separate_curve(pred_df)
     gt_curves = separate_curve(gt_df)
-    
-    subplot_gt2pred, type2_gt2pred = pair_curves(pred_curves, gt_curves)
 
+    if len(gt_curves) <= len(pred_curves):
+        paired_pred_curves, paired_gt_curves = pair_curves(pred_curves, gt_curves)
+    else:
+        paired_gt_curves, paired_pred_curves = pair_curves(gt_curves, pred_curves)
+
+    new_pred_x, new_gt_x = [], []
     new_pred_y, new_gt_y, new_pred_err, new_gt_err = [], [], [], []
     discrete_identified = 0
-    discrete_total = 0
-    discrete_generated = 0
-    for subplot, type2 in gt_curves.keys():
-        gt_curve = gt_curves[(subplot, type2)]
-        if subplot not in subplot_gt2pred or type2 not in type2_gt2pred:
-            if len(gt_curve["x"]) < 50:
-                discrete_total += len(gt_curve["x"])
-            continue
-        pred_curve = pred_curves[(subplot_gt2pred[subplot], type2_gt2pred[type2])]
+    discrete_generated = sum([len(curve["x"]) for _, curve in pred_curves.items()])
+    discrete_total = sum([len(curve["x"]) if len(curve["x"]) < 50 else 0 for _, curve in gt_curves.items()])
+    
+    for pred_curve, gt_curve in zip(paired_pred_curves, paired_gt_curves):
         if len(gt_curve["x"]) >= 50:
             # This is a continuous plot
             _, pred_y_resample, gt_y_resample = interpolate(pred_curve["x"], pred_curve["y"], gt_curve["x"], gt_curve["y"])
             new_pred_y.extend(pred_y_resample)
             new_gt_y.extend(gt_y_resample)
+            discrete_generated -= len(pred_curve["x"])
             if "err" in gt_curve.keys() and len(gt_curve["err"]) > 0:
                 _, pred_err_resample, gt_err_resample = interpolate(pred_curve["x"], pred_curve["err"], gt_curve["x"], gt_curve["err"])
                 new_pred_err.extend(pred_err_resample)
                 new_gt_err.extend(gt_err_resample)
         else:
             # This is a discrete plot
-            pred_value, gt_value, pred_error, gt_error = pair_data_points(pred_curve, gt_curve)
-            new_pred_y.extend(pred_value)
-            new_gt_y.extend(gt_value)
-            discrete_identified += len(gt_value)
-            discrete_total += len(gt_curve["x"])
-            discrete_generated += len(pred_curve["x"])
-            print("Identified: ", len(gt_value), "Total: ", len(gt_curve["x"]), "Generated: ", len(pred_curve["x"]))
-            if pred_error is not None:
-                new_pred_err.extend(pred_error)
-                new_gt_err.extend(gt_error)
+            if len(gt_curve["x"]) <= len(pred_curve["x"]):
+                paired_pred_curve, paired_gt_curve = pair_data_points(pred_curve, gt_curve)
+            else:
+                paired_gt_curve, paired_pred_curve = pair_data_points(gt_curve, pred_curve)
+            new_pred_x.extend(paired_pred_curve["x"])
+            new_pred_y.extend(paired_pred_curve["y"])
+            new_gt_x.extend(paired_gt_curve["x"])
+            new_gt_y.extend(paired_gt_curve["y"])
+            discrete_identified += len(paired_gt_curve["y"])
+            if paired_pred_curve["err"] is not None:
+                new_pred_err.extend(paired_pred_curve["err"])
+                new_gt_err.extend(paired_gt_curve["err"])
     
     perf = {}
+    if len(new_gt_x) > 0:
+        perf["X performance"] = cal_perf(new_pred_x, new_gt_x)
     if len(new_gt_y) > 0:
         perf["Value performance"] = cal_perf(new_pred_y, new_gt_y)
     if len(new_gt_err) > 0:
         perf["Error performance"] = cal_perf(new_pred_err, new_gt_err)
-        perf["Overall performance"] = cal_perf(new_pred_y + new_pred_err, new_gt_y + new_gt_err)
+    if len(new_gt_x) > 0 or len(new_gt_err) > 0:
+        perf["Overall performance"] = cal_perf(new_pred_x + new_pred_y + new_pred_err, new_gt_x + new_gt_y + new_gt_err)
     if discrete_total > 0:
         perf["Identified rate"] = discrete_identified / discrete_total
         if discrete_generated > 0:
@@ -344,3 +363,9 @@ def evaluate_table(pred_dfs, gt_dfs):
                         print(BLUE + "Value mismatch: ", gt_df.columns[i], j, pred_df.iloc[j][i], gt_df.iloc[j][i], pred_digit, gt_digit, pred_repeat, gt_repeat, RESET)
     print("same: ", same, "total: ", total)
     return same / total
+
+if __name__ == "__main__":
+    pred = [pd.read_csv("Baseline/output/P-49-O6.csv")]
+    gt = [pd.read_csv("/Users/zhangliyun/Documents/UIUC/figure/figure-to-data/49/P-49-O6.csv")]
+    perf = evaluate_plot(pred, gt)
+    print(perf)
