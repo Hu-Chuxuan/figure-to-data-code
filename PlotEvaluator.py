@@ -2,19 +2,7 @@ import numpy as np
 import pandas as pd
 from scipy.interpolate import interp1d
 import re
-
-YELLOW = '\033[93m'
-BLUE = '\033[94m'
-MAGENTA = '\033[95m'
-RESET = '\033[0m'
-
-class WrongCSVNumberError(Exception):
-    def __init__(self, pred_num, gt_num):
-        super().__init__(YELLOW + f"The number of predicted CSV files is {pred_num} when the ground truth has {gt_num} CSV files." + RESET)
-
-class FormatError(Exception):
-    def __init__(self, msg):
-        super().__init__(YELLOW + msg + RESET)
+from Exceptions import WrongCSVNumberError, FormatError, YELLOW, BLUE, MAGENTA, RESET
 
 '''
 @description: if the string is in the format of "start - end" where start and end are two numbers, 
@@ -23,16 +11,25 @@ class FormatError(Exception):
 @return: start and end values, None if the string is not in the format of "start - end"
 '''
 def parse_range(value):
-    if "-" in value and value.count("-") == 1:
-        start, end = value.split("-")
-        start = start.strip()
-        end = end.strip()
-        try:
-            start = float(start)
-            end = float(end)
-        except:
-            return None, None
-        return start, end
+    if len(value) <= 1:
+        return None, None
+    bracket_open = ["[", "(", "{", "<"]
+    bracket_close = ["]", ")", "}", ">"]
+    value = value.strip()
+    if value[0] in bracket_open and value[-1] == bracket_close[bracket_open.index(value[0])]:
+        value = value[1:-1]
+    range_dict = ["-", ",", ";", "to", "--"]
+    for range_str in range_dict:
+        if range_str in value and value.count(range_str) == 1:
+            start, end = value.split(range_str)
+            start = start.strip()
+            end = end.strip()
+            try:
+                start = float(start)
+                end = float(end)
+            except:
+                return None, None
+            return start, end
     return None, None
 
 '''
@@ -304,118 +301,3 @@ def evaluate_plot(pred_df, gt_df):
         curves_in_subplot[subplot_gt] = curves
 
     return cal_perf(curves_in_subplot)
-
-def is_repeat(value, repeat):
-    if len(repeat) == 0 or len(value) % len(repeat) != 0:
-        return False
-    for i in range(1, len(value)//len(repeat)):
-        if value != repeat * i:
-            return False
-    return True
-
-def parse_digit_from_sig(value):
-    # find the number at the beginning of the string
-    value = value.strip()
-    match = re.match(r'^-?\d*\.?\d*', value)
-    if not match:
-        return None, None
-    digit = match.group(0)
-    if len(digit) == 0:
-        return None, None
-    value = value[len(digit):]
-    digit = float(digit)
-    if len(value) == 0:
-        return digit, 0
-    
-    # find repeat in value[len(digit):]
-    repeat = ""
-    if "{" in value and "}" in value:
-        value = value[value.find("{")+1:value.find("}")]
-    for ch in value:
-        if not is_repeat(value, repeat):
-            repeat += ch
-        else:
-            break
-    repeat_cnt = len(value) // len(repeat)
-    if repeat_cnt == 1:
-        # if a space is in the repeat, or it contain both digits and letters, we do not consider it as a valid repeat
-        if " " in repeat or (re.search(r'\d', repeat) and re.search(r'\D', repeat)):
-            return None, None
-    return digit, repeat_cnt
-
-'''
-@raise:
-    WrongCSVNumberError: the number of predicted CSV files is different from the number of ground truth CSV files
-    FormatError: the number of columns in the predicted data and the ground truth data are different
-'''
-def evaluate_table(pred_dfs, gt_dfs):
-    if len(pred_dfs) != len(gt_dfs):
-        raise WrongCSVNumberError(len(pred_dfs), len(gt_dfs))
-    
-    same = 0
-    total = 0
-    
-    for df_ptr in range(len(pred_dfs)):
-        pred_df = pred_dfs[df_ptr]
-        gt_df = gt_dfs[df_ptr]
-
-        if len(pred_df.columns) != len(gt_df.columns):
-            raise FormatError(f"The predicted CSV file has {len(pred_df.columns)} columns while the ground truth CSV file has {len(gt_df.columns)} columns.")
-
-        for i in range(len(gt_df.columns)):
-            for j in range(len(gt_df)):
-                if type(gt_df.iloc[j][i]) != str:
-                    if type(pred_df.iloc[j][i])  == str:
-                        try:
-                            pred_digit = float(pred_df.iloc[j][i].strip())
-                            if pred_digit == gt_df.iloc[j][i]:
-                                same += 1
-                            else:
-                                print(BLUE + "Value mismatch: ", gt_df.columns[i], j, pred_df.iloc[j][i], gt_df.iloc[j][i], type(pred_df.iloc[j][i]), type(gt_df.iloc[j][i]), RESET)
-                        except:
-                            pred_digit, pred_repeat = parse_digit_from_sig(pred_df.iloc[j][i])
-                            if pred_digit is not None:
-                                if pred_digit == gt_df.iloc[j][i] and pred_repeat == 0:
-                                    same += 1
-                                else:
-                                    print(BLUE + "Value mismatch: ", gt_df.columns[i], j, pred_df.iloc[j][i], gt_df.iloc[j][i], pred_digit, gt_df.iloc[j][i], pred_repeat, RESET)
-                            else:
-                                print(MAGENTA + "Type mismatch: ", gt_df.columns[i], j, pred_df.iloc[j][i], gt_df.iloc[j][i], type(pred_df.iloc[j][i]), type(gt_df.iloc[j][i]), RESET)
-                    if type(pred_df.iloc[j][i]) != str: 
-                        if pred_df.iloc[j][i] == gt_df.iloc[j][i] or (np.isnan(pred_df.iloc[j][i]) and np.isnan(gt_df.iloc[j][i])):
-                            same += 1
-                        else:
-                            print(BLUE + "Value mismatch: ", gt_df.columns[i], j, pred_df.iloc[j][i], gt_df.iloc[j][i], type(pred_df.iloc[j][i]), type(gt_df.iloc[j][i]), RESET)
-                    else:
-                        try:
-                            pred_digit = float(pred_df.iloc[j][i].strip())
-                            if pred_digit == gt_df.iloc[j][i]:
-                                same += 1
-                            else:
-                                print(BLUE + "Value mismatch: ", gt_df.columns[i], j, pred_df.iloc[j][i], gt_df.iloc[j][i], type(pred_df.iloc[j][i]), type(gt_df.iloc[j][i]), RESET)
-                        except:
-                            print(MAGENTA + "Type mismatch: ", gt_df.columns[i], j, pred_df.iloc[j][i], gt_df.iloc[j][i], type(pred_df.iloc[j][i]), type(gt_df.iloc[j][i]), RESET)
-                    total += 1
-                else:
-                    # TODO: Is pred = nan when gt is not handled?
-                    # TODO: Handle one of them is empty and the other is not
-                    gt_digit, gt_repeat = parse_digit_from_sig(gt_df.iloc[j][i])
-                    if gt_digit is None:
-                        print("Not a data point ", gt_df.columns[i], j, gt_df.iloc[j][i])
-                        continue
-
-                    if type(pred_df.iloc[j][i]) != str:
-                        pred_digit = pred_df.iloc[j][i]
-                        pred_repeat = 0
-                    else:
-                        pred_digit, pred_repeat = parse_digit_from_sig(pred_df.iloc[j][i])
-                    total += 1
-                    if pred_digit is None:
-                        print(MAGENTA + "Type mismatch: ", gt_df.columns[i], j, pred_df.iloc[j][i], gt_df.iloc[j][i], type(pred_df.iloc[j][i]), type(gt_df.iloc[j][i]), RESET)
-                        continue
-                    if pred_digit == gt_digit and pred_repeat == gt_repeat:
-                        same += 1
-                    else:
-                        print(BLUE + "Value mismatch: ", gt_df.columns[i], j, pred_df.iloc[j][i], gt_df.iloc[j][i], pred_digit, gt_digit, pred_repeat, gt_repeat, RESET)
-    print("same: ", same, "total: ", total)
-    return same / total
