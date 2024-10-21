@@ -75,10 +75,7 @@ def pair_score(pred, gt):
 def pair_data_points(pred_curve, gt_curve):
     pred_x, gt_x = [], []
     pred_value, gt_value = [], []
-    if "err" in gt_curve.keys():
-        pred_error, gt_error = [], []
-    else:
-        pred_error, gt_error = None, None
+    pred_error, gt_error = [], []
     
     pred_paired = [False] * len(pred_curve["x"])
     for i in range(len(gt_curve["x"])):
@@ -101,7 +98,7 @@ def pair_data_points(pred_curve, gt_curve):
             pred_value.append(pred_curve["y"][best_j])
             gt_value.append(gt_curve["y"][i])
             pred_paired[best_j] = True
-            if pred_error is not None:
+            if len(gt_curve["err"]) > 0:
                 pred_error.append(pred_curve["err"][best_j])
                 gt_error.append(gt_curve["err"][i])
     return {"x": pred_x, "y": pred_value, "err": pred_error}, {"x": gt_x, "y": gt_value, "err": gt_error}
@@ -127,9 +124,7 @@ def separate_curve(df):
         if "Type-2" in df.columns and cur_type2 != df["Type-2"][i]:
             cur_type2 = df["Type-2"][i]
         if (cur_subplot, cur_type2) not in curves:
-            curves[(cur_subplot, cur_type2)] = {"x": [], "y": []}
-            if "Error Bar Length" in df.columns:
-                curves[(cur_subplot, cur_type2)]["err"] = []
+            curves[(cur_subplot, cur_type2)] = {"x": [], "y": [], "err": []}
         curves[(cur_subplot, cur_type2)]["x"].append(df["Type-1"][i])
         curves[(cur_subplot, cur_type2)]["y"].append(df["Value"][i])
         if "Error Bar Length" in df.columns:
@@ -141,11 +136,10 @@ def separate_curve(df):
     pred_curves: Dict, (subplot, type2) -> curve
     gt_curves: Dict, (subplot, type2) -> curve
 @return:
-    subplot_gt2pred: Dict, mapping a subplot value in the ground truth data to a subplot value in the predicted data
-    type2_gt2pred: Dict, mapping a type2 value in the ground truth data to a type2 value in the predicted data
+    paired_curves: Dict, subplot_gt -> List of curve pairs (pred_curve, gt_curve)
 '''
 def pair_curves(pred_curves, gt_curves):
-    paired_gt_curves, paired_pred_curves = [], []
+    paired_curves = {}
     paired = {}
     for subplot_gt, type2_gt in gt_curves.keys():
         best_score = np.inf
@@ -162,13 +156,56 @@ def pair_curves(pred_curves, gt_curves):
                 best_type2_pred = type2_pred
         if best_score < np.inf:
             paired[(best_subplot_pred, best_type2_pred)] = (subplot_gt, type2_gt)
-            paired_gt_curves.append(gt_curves[(subplot_gt, type2_gt)])
-            paired_pred_curves.append(pred_curves[(best_subplot_pred, best_type2_pred)])
+            if subplot_gt not in paired_curves:
+                paired_curves[subplot_gt] = []
+            paired_curves[subplot_gt].append((pred_curves[(best_subplot_pred, best_type2_pred)], gt_curves[(subplot_gt, type2_gt)]))
 
-    return paired_pred_curves, paired_gt_curves
+    return paired_curves
 
-def cal_perf(pred_values, gt_values):
-    print(len(pred_values), len(gt_values))
+def merge_perf(perf_list):
+    overall_perf = {}
+    for perf in perf_list:
+        for key in perf.keys():
+            if key in overall_perf:
+                continue
+            if type(perf[key]) == dict:
+                l = []
+                for i in range(len(perf_list)):
+                    if key in perf_list[i]:
+                        l.append(perf_list[i][key])
+                overall_perf[key] = merge_perf(l)
+            else:
+                res = []
+                for i in range(len(perf_list)):
+                    if key in perf_list[i] and not np.isnan(perf_list[i][key]):
+                        res.append(perf_list[i][key])
+                if len(res) == 0:
+                    overall_perf[key] = np.nan
+                else:
+                    overall_perf[key] = np.mean(res)
+    return overall_perf
+
+def cal_perf(curves_in_subplot):
+    curve_level_perf = {}
+    for subplot, curves in curves_in_subplot.items():
+        curve_level_perf[subplot] = []
+        for curve in curves:
+            perf = {}
+            if len(curve["x"][1]) > 0:
+                perf["X performance"] = cal_metrics(curve["x"][0], curve["x"][1])
+            if len(curve["y"][1]) > 0:
+                perf["Value performance"] = cal_metrics(curve["y"][0], curve["y"][1])
+            if len(curve["err"][1]) > 0:
+                perf["Error performance"] = cal_metrics(curve["err"][0], curve["err"][1])
+            if len(curve["x"][1]) > 0 or len(curve["err"][1]) > 0:
+                perf["Overall performance"] = cal_metrics(curve["x"][0] + curve["y"][0] + curve["err"][0], curve["x"][1] + curve["y"][1] + curve["err"][1])
+            curve_level_perf[subplot].append(perf)
+    subplot_level_perf = []
+    for subplot, curve_perf in curve_level_perf.items():
+        subplot_level_perf.append(merge_perf(curve_perf))
+    return merge_perf(subplot_level_perf)
+
+def cal_metrics(pred_values, gt_values):
     pred_values = np.array(pred_values)
     gt_values = np.array(gt_values)
     # Mean Absolute Error
@@ -216,51 +253,42 @@ def evaluate_plot(pred_df, gt_df):
     gt_curves = separate_curve(gt_df)
 
     if len(gt_curves) <= len(pred_curves):
-        paired_pred_curves, paired_gt_curves = pair_curves(pred_curves, gt_curves)
+        paired_curves = pair_curves(pred_curves, gt_curves)
+        pred_idx, gt_idx = 0, 1
     else:
-        paired_gt_curves, paired_pred_curves = pair_curves(gt_curves, pred_curves)
+        paired_curves = pair_curves(gt_curves, pred_curves)
+        pred_idx, gt_idx = 1, 0
 
-    new_pred_x, new_gt_x = [], []
-    new_pred_y, new_gt_y, new_pred_err, new_gt_err = [], [], [], []
+    curves_in_subplot = {}
     discrete_identified = 0
     discrete_generated = sum([len(curve["x"]) for _, curve in pred_curves.items()])
     discrete_total = sum([len(curve["x"]) if len(curve["x"]) < 50 else 0 for _, curve in gt_curves.items()])
     
-    for pred_curve, gt_curve in zip(paired_pred_curves, paired_gt_curves):
-        if len(gt_curve["x"]) >= 50:
-            # This is a continuous plot
-            _, pred_y_resample, gt_y_resample = interpolate(pred_curve["x"], pred_curve["y"], gt_curve["x"], gt_curve["y"])
-            new_pred_y.extend(pred_y_resample)
-            new_gt_y.extend(gt_y_resample)
-            discrete_generated -= len(pred_curve["x"])
-            if "err" in gt_curve.keys() and len(gt_curve["err"]) > 0:
-                _, pred_err_resample, gt_err_resample = interpolate(pred_curve["x"], pred_curve["err"], gt_curve["x"], gt_curve["err"])
-                new_pred_err.extend(pred_err_resample)
-                new_gt_err.extend(gt_err_resample)
-        else:
-            # This is a discrete plot
-            if len(gt_curve["x"]) <= len(pred_curve["x"]):
-                paired_pred_curve, paired_gt_curve = pair_data_points(pred_curve, gt_curve)
+    for subplot_gt, curve_pairs in paired_curves.items():
+        curves = []
+        for curve_pair in curve_pairs:
+            pred_curve, gt_curve = curve_pair[pred_idx], curve_pair[gt_idx]
+            if len(gt_curve["x"]) >= 50:
+                # This is a continuous plot
+                _, pred_y_resample, gt_y_resample = interpolate(pred_curve["x"], pred_curve["y"], gt_curve["x"], gt_curve["y"])
+                curves.append({"x": ([], []), "y": (pred_y_resample, gt_y_resample)})
+                discrete_generated -= len(pred_curve["x"])
+                if "err" in gt_curve.keys() and len(gt_curve["err"]) > 0:
+                    _, pred_err_resample, gt_err_resample = interpolate(pred_curve["x"], pred_curve["err"], gt_curve["x"], gt_curve["err"])
+                    curves[-1]["err"] = (pred_err_resample, gt_err_resample)
+                else:
+                    curves[-1]["err"] = ([], [])
             else:
-                paired_gt_curve, paired_pred_curve = pair_data_points(gt_curve, pred_curve)
-            new_pred_x.extend(paired_pred_curve["x"])
-            new_pred_y.extend(paired_pred_curve["y"])
-            new_gt_x.extend(paired_gt_curve["x"])
-            new_gt_y.extend(paired_gt_curve["y"])
-            discrete_identified += len(paired_gt_curve["y"])
-            if paired_pred_curve["err"] is not None:
-                new_pred_err.extend(paired_pred_curve["err"])
-                new_gt_err.extend(paired_gt_curve["err"])
-    
-    perf = {}
-    if len(new_gt_x) > 0:
-        perf["X performance"] = cal_perf(new_pred_x, new_gt_x)
-    if len(new_gt_y) > 0:
-        perf["Value performance"] = cal_perf(new_pred_y, new_gt_y)
-    if len(new_gt_err) > 0:
-        perf["Error performance"] = cal_perf(new_pred_err, new_gt_err)
-    if len(new_gt_x) > 0 or len(new_gt_err) > 0:
-        perf["Overall performance"] = cal_perf(new_pred_x + new_pred_y + new_pred_err, new_gt_x + new_gt_y + new_gt_err)
+                # This is a discrete plot
+                if len(gt_curve["x"]) <= len(pred_curve["x"]):
+                    paired_pred_curve, paired_gt_curve = pair_data_points(pred_curve, gt_curve)
+                else:
+                    paired_gt_curve, paired_pred_curve = pair_data_points(gt_curve, pred_curve)
+                curves.append({"x": (paired_pred_curve["x"], paired_gt_curve["x"]), "y": (paired_pred_curve["y"], paired_gt_curve["y"]), "err": (paired_pred_curve["err"], paired_gt_curve["err"])})
+                discrete_identified += len(paired_gt_curve["y"])
+        curves_in_subplot[subplot_gt] = curves
+
+    return cal_perf(curves_in_subplot)
     if discrete_total > 0:
         perf["Identified rate"] = discrete_identified / discrete_total
         if discrete_generated > 0:
