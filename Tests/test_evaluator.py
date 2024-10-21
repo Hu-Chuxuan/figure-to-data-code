@@ -4,7 +4,8 @@ import sys, os
 import numpy as np
 
 sys.path.append(os.path.abspath(os.path.dirname(os.path.abspath(os.path.dirname(__file__)))))
-from Evaluator import evaluate_plot, evaluate_table, cal_perf, merge_perf, cal_metrics
+from PlotEvaluator import evaluate_plot, cal_perf, merge_perf, cal_metrics
+from TableEvaluator import evaluate_table, is_match
 
 class TestPlotEvaluator(unittest.TestCase):
     def assertSameDict(self, pred, gt):
@@ -449,6 +450,49 @@ class TestPlotEvaluatorPairing(TestPlotEvaluator):
         pass
 
 class TestTableEvaluator(unittest.TestCase):
+    def assertSame(self, value1, value2, same_inc, total_inc):
+        same, total = is_match(value1, value2)
+        self.assertEqual(same, same_inc)
+        self.assertEqual(total, total_inc)
+
+    def test_is_match(self):
+        valid = [
+            [np.nan, "", None], # Empty values
+            [1, "1", np.float64(1), np.int64(1)], # no significance
+            ["1*", "1\dagger", "  1*", "1*   "], # significance level 1
+            ["1**", "1\dagger\dagger", "  1**", "1**  "], # significance level 2
+            ["1***  ", "1\dagger\dagger\dagger", "  1\dagger\dagger\dagger", "1***  "] # significance level 3
+        ]
+        invalid = ["1 million", "invalid number", "1.5 is smaller than 2.0"]
+        
+        # Test valid values
+        for sign_level, gt_list in enumerate(valid):
+            for gt in gt_list:
+                for sign_level_pred, pred_list in enumerate(valid):
+                    for pred in pred_list:
+                        self.assertSame(pred, gt, 1 if sign_level == sign_level_pred else 0, 1)
+                for pred in invalid:
+                    self.assertSame(pred, gt, 0, 1)
+        
+        # Test invalid values
+        for gt in invalid:
+            for pred_list in valid:
+                for pred in pred_list:
+                    self.assertSame(pred, gt, 0, 0)
+            for pred in invalid:
+                self.assertSame(pred, gt, 0, 0)
+        
+    def test_is_match_range(self):
+        ranges = [
+            ["0.5 - 0.6", "[0.5, 0.6]", "[0.5; 0.6]", "0.5 to 0.6"],
+            ["0.1 - 0.2", "[0.1, 0.2]", "[0.1; 0.2]", "0.1 to 0.2"]
+        ]
+        for i, gt_list in enumerate(ranges):
+            for gt in gt_list:
+                for j, pred_list in enumerate(ranges):
+                    for pred in pred_list:
+                        self.assertSame(pred, gt, 1 if i == j else 0, 1)
+    
     def DISABLE_test_eval_table_simple(self):
         pass
 
