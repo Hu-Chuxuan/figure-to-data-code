@@ -40,10 +40,20 @@ def parse_range(value):
 @return: the score of the pair. np.inf if the two values are completely different strings
 '''
 def pair_score(pred, gt):
+    # Possible types: np.float64, np.int64, str, NoneType
+    if pred == None or gt == None:
+        return 0 if pred == gt else np.inf, []
+    
+    if type(gt) != str:
+        gt = gt.astype(np.float64)
+    if type(pred) != str:
+        pred = pred.astype(np.float64)
+    
     if type(pred) != type(gt):
+        # One str and one np.float64, convert pred to type of gt
         if type(gt) != str:
             try:
-                pred = float(pred)
+                pred = float(pred.strip())
             except:
                 pred = str(pred)
                 gt = str(gt)
@@ -77,12 +87,12 @@ def pair_data_points(pred_curve, gt_curve):
     pred_value, gt_value = [], []
     pred_error, gt_error = [], []
     
-    pred_paired = [False] * len(pred_curve["x"])
-    for i in range(len(gt_curve["x"])):
+    pred_paired = [False] * len(pred_curve["y"])
+    for i in range(len(gt_curve["y"])):
         best_score = np.inf
         best_j = np.inf
         best_x_pairs = []
-        for j in range(len(pred_curve["x"])):
+        for j in range(len(pred_curve["y"])):
             if pred_paired[j]:
                 continue
             score, x_pairs = pair_score(pred_curve["x"][j], gt_curve["x"][i])
@@ -199,6 +209,10 @@ def cal_perf(curves_in_subplot):
                 perf["Error performance"] = cal_metrics(curve["err"][0], curve["err"][1])
             if len(curve["x"][1]) > 0 or len(curve["err"][1]) > 0:
                 perf["Overall performance"] = cal_metrics(curve["x"][0] + curve["y"][0] + curve["err"][0], curve["x"][1] + curve["y"][1] + curve["err"][1])
+            if "gt_len" in curve.keys():
+                perf["Identified rate"] = len(curve["y"][1]) / curve["gt_len"]
+            if "pred_len" in curve.keys():
+                perf["Identified recall"] = len(curve["y"][1]) / curve["pred_len"]
             curve_level_perf[subplot].append(perf)
     subplot_level_perf = []
     for subplot, curve_perf in curve_level_perf.items():
@@ -218,7 +232,7 @@ def cal_metrics(pred_values, gt_values):
     # Mean Absolute Percentage Error (epsilon = 1e-5)
     mape_eps = np.mean(np.abs(pred_values - gt_values) / (np.abs(gt_values) + 1e-5))
     # Symmetric Mean Absolute Percentage Error
-    smape = np.mean(np.abs(pred_values - gt_values) / (np.abs(pred_values) + np.abs(gt_values))) * 2
+    smape = np.mean(np.abs(pred_values - gt_values) / (np.abs(pred_values) + np.abs(gt_values) + 1e-5)) * 2
     # Mean Absolute Scaled Error
     mase = np.mean(np.abs(pred_values - gt_values)) / (np.max(gt_values) - np.min(gt_values))
     # R-squared
@@ -260,19 +274,15 @@ def evaluate_plot(pred_df, gt_df):
         pred_idx, gt_idx = 1, 0
 
     curves_in_subplot = {}
-    discrete_identified = 0
-    discrete_generated = sum([len(curve["x"]) for _, curve in pred_curves.items()])
-    discrete_total = sum([len(curve["x"]) if len(curve["x"]) < 50 else 0 for _, curve in gt_curves.items()])
     
     for subplot_gt, curve_pairs in paired_curves.items():
         curves = []
         for curve_pair in curve_pairs:
             pred_curve, gt_curve = curve_pair[pred_idx], curve_pair[gt_idx]
-            if len(gt_curve["x"]) >= 50:
+            if len(gt_curve["y"]) >= 50:
                 # This is a continuous plot
                 _, pred_y_resample, gt_y_resample = interpolate(pred_curve["x"], pred_curve["y"], gt_curve["x"], gt_curve["y"])
                 curves.append({"x": ([], []), "y": (pred_y_resample, gt_y_resample)})
-                discrete_generated -= len(pred_curve["x"])
                 if "err" in gt_curve.keys() and len(gt_curve["err"]) > 0:
                     _, pred_err_resample, gt_err_resample = interpolate(pred_curve["x"], pred_curve["err"], gt_curve["x"], gt_curve["err"])
                     curves[-1]["err"] = (pred_err_resample, gt_err_resample)
@@ -280,22 +290,20 @@ def evaluate_plot(pred_df, gt_df):
                     curves[-1]["err"] = ([], [])
             else:
                 # This is a discrete plot
-                if len(gt_curve["x"]) <= len(pred_curve["x"]):
+                if len(gt_curve["y"]) <= len(pred_curve["y"]):
                     paired_pred_curve, paired_gt_curve = pair_data_points(pred_curve, gt_curve)
                 else:
                     paired_gt_curve, paired_pred_curve = pair_data_points(gt_curve, pred_curve)
-                curves.append({"x": (paired_pred_curve["x"], paired_gt_curve["x"]), "y": (paired_pred_curve["y"], paired_gt_curve["y"]), "err": (paired_pred_curve["err"], paired_gt_curve["err"])})
-                discrete_identified += len(paired_gt_curve["y"])
+                curves.append({
+                    "x": (paired_pred_curve["x"], paired_gt_curve["x"]), 
+                    "y": (paired_pred_curve["y"], paired_gt_curve["y"]), 
+                    "err": (paired_pred_curve["err"], paired_gt_curve["err"]),
+                    "gt_len": len(gt_curve["y"]),
+                    "pred_len": len(pred_curve["y"])
+                })
         curves_in_subplot[subplot_gt] = curves
 
     return cal_perf(curves_in_subplot)
-    if discrete_total > 0:
-        perf["Identified rate"] = discrete_identified / discrete_total
-        if discrete_generated > 0:
-            perf["Identified recall"] = discrete_identified / discrete_generated
-        else:
-            perf["Identified recall"] = np.nan
-    return perf
 
 def is_repeat(value, repeat):
     if len(repeat) == 0 or len(value) % len(repeat) != 0:
@@ -307,18 +315,20 @@ def is_repeat(value, repeat):
 
 def parse_digit_from_sig(value):
     # find the number at the beginning of the string
+    value = value.strip()
     match = re.match(r'^-?\d*\.?\d*', value)
     if not match:
         return None, None
     digit = match.group(0)
     if len(digit) == 0:
         return None, None
-    if len(digit) == len(value):
+    value = value[len(digit):]
+    digit = float(digit)
+    if len(value) == 0:
         return digit, 0
     
     # find repeat in value[len(digit):]
     repeat = ""
-    value = value[len(digit):]
     if "{" in value and "}" in value:
         value = value[value.find("{")+1:value.find("}")]
     for ch in value:
@@ -355,11 +365,30 @@ def evaluate_table(pred_dfs, gt_dfs):
         for i in range(len(gt_df.columns)):
             for j in range(len(gt_df)):
                 if type(gt_df.iloc[j][i]) != str:
-                    if type(pred_df.iloc[j][i]) != str and (pred_df.iloc[j][i] == gt_df.iloc[j][i] or (np.isnan(pred_df.iloc[j][i]) and np.isnan(gt_df.iloc[j][i]))):
-                        same += 1
+                    if type(pred_df.iloc[j][i])  == str:
+                        try:
+                            pred_digit = float(pred_df.iloc[j][i].strip())
+                            if pred_digit == gt_df.iloc[j][i]:
+                                same += 1
+                            else:
+                                print(BLUE + "Value mismatch: ", gt_df.columns[i], j, pred_df.iloc[j][i], gt_df.iloc[j][i], type(pred_df.iloc[j][i]), type(gt_df.iloc[j][i]), RESET)
+                        except:
+                            pred_digit, pred_repeat = parse_digit_from_sig(pred_df.iloc[j][i])
+                            if pred_digit is not None:
+                                if pred_digit == gt_df.iloc[j][i] and pred_repeat == 0:
+                                    same += 1
+                                else:
+                                    print(BLUE + "Value mismatch: ", gt_df.columns[i], j, pred_df.iloc[j][i], gt_df.iloc[j][i], pred_digit, gt_df.iloc[j][i], pred_repeat, RESET)
+                            else:
+                                print(MAGENTA + "Type mismatch: ", gt_df.columns[i], j, pred_df.iloc[j][i], gt_df.iloc[j][i], type(pred_df.iloc[j][i]), type(gt_df.iloc[j][i]), RESET)
+                    if type(pred_df.iloc[j][i]) != str: 
+                        if pred_df.iloc[j][i] == gt_df.iloc[j][i] or (np.isnan(pred_df.iloc[j][i]) and np.isnan(gt_df.iloc[j][i])):
+                            same += 1
+                        else:
+                            print(BLUE + "Value mismatch: ", gt_df.columns[i], j, pred_df.iloc[j][i], gt_df.iloc[j][i], type(pred_df.iloc[j][i]), type(gt_df.iloc[j][i]), RESET)
                     else:
                         try:
-                            pred_digit = float(pred_df.iloc[j][i])
+                            pred_digit = float(pred_df.iloc[j][i].strip())
                             if pred_digit == gt_df.iloc[j][i]:
                                 same += 1
                             else:
@@ -368,22 +397,21 @@ def evaluate_table(pred_dfs, gt_dfs):
                             print(MAGENTA + "Type mismatch: ", gt_df.columns[i], j, pred_df.iloc[j][i], gt_df.iloc[j][i], type(pred_df.iloc[j][i]), type(gt_df.iloc[j][i]), RESET)
                     total += 1
                 else:
+                    # TODO: Is pred = nan when gt is not handled?
+                    # TODO: Handle one of them is empty and the other is not
                     gt_digit, gt_repeat = parse_digit_from_sig(gt_df.iloc[j][i])
+                    if gt_digit is None:
+                        print("Not a data point ", gt_df.columns[i], j, gt_df.iloc[j][i])
+                        continue
+
                     if type(pred_df.iloc[j][i]) != str:
                         pred_digit = pred_df.iloc[j][i]
                         pred_repeat = 0
                     else:
                         pred_digit, pred_repeat = parse_digit_from_sig(pred_df.iloc[j][i])
-                    try:
-                        gt_digit = float(gt_digit)
-                    except:
-                        print("Not a data point ", gt_df.columns[i], j, gt_df.iloc[j][i])
-                        continue
                     total += 1
-                    try:
-                        pred_digit = float(pred_digit)
-                    except:
-                        print(MAGENTA + "Type mismatch: ", gt_df.columns[i], j, pred_digit, gt_digit, pred_repeat, gt_repeat, RESET)
+                    if pred_digit is None:
+                        print(MAGENTA + "Type mismatch: ", gt_df.columns[i], j, pred_df.iloc[j][i], gt_df.iloc[j][i], type(pred_df.iloc[j][i]), type(gt_df.iloc[j][i]), RESET)
                         continue
                     if pred_digit == gt_digit and pred_repeat == gt_repeat:
                         same += 1
@@ -391,9 +419,3 @@ def evaluate_table(pred_dfs, gt_dfs):
                         print(BLUE + "Value mismatch: ", gt_df.columns[i], j, pred_df.iloc[j][i], gt_df.iloc[j][i], pred_digit, gt_digit, pred_repeat, gt_repeat, RESET)
     print("same: ", same, "total: ", total)
     return same / total
-
-if __name__ == "__main__":
-    pred = [pd.read_csv("Baseline/output/P-49-O6.csv")]
-    gt = [pd.read_csv("/Users/zhangliyun/Documents/UIUC/figure/figure-to-data/49/P-49-O6.csv")]
-    perf = evaluate_plot(pred, gt)
-    print(perf)
