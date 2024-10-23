@@ -18,7 +18,7 @@ def parse_range(value):
     value = value.strip()
     if value[0] in bracket_open and value[-1] == bracket_close[bracket_open.index(value[0])]:
         value = value[1:-1]
-    range_dict = ["-", ",", ";", "to", "--"]
+    range_dict = [",", ";", "to", "--"]
     for range_str in range_dict:
         if range_str in value and value.count(range_str) == 1:
             start, end = value.split(range_str)
@@ -30,6 +30,20 @@ def parse_range(value):
             except:
                 return None, None
             return start, end
+    if "-" in value:
+        dash_indices = [i for i in range(len(value)) if value[i] == "-"]
+        if dash_indices[0] == 0:
+            split_idx = dash_indices[1]
+        else:
+            split_idx = dash_indices[0]
+        start = value[:split_idx].strip()
+        end = value[split_idx+1:].strip()
+        try:
+            start = float(start)
+            end = float(end)
+            return start, end
+        except:
+            return None, None
     return None, None
 
 '''
@@ -37,14 +51,13 @@ def parse_range(value):
 @return: the score of the pair. np.inf if the two values are completely different strings
 '''
 def pair_score(pred, gt):
-    # Possible types: np.float64, np.int64, str, NoneType
+    # Possible types: np.float64, np.int64, str, NoneType, float
     if pred == None or gt == None:
         return 0 if pred == gt else np.inf, []
-    
     if type(gt) != str:
-        gt = gt.astype(np.float64)
+        gt = float(gt)
     if type(pred) != str:
-        pred = pred.astype(np.float64)
+        pred = float(pred)
     
     if type(pred) != type(gt):
         # One str and one np.float64, convert pred to type of gt
