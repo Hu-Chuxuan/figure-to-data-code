@@ -27,7 +27,7 @@ def parse_digit_from_sig(value):
     # find repeat in value[len(digit):]
     repeat = ""
     if "{" in value and "}" in value:
-        value = value[value.find("{")+1:value.find("}")]
+        value = value[value.find("{")+1:value.find("}")].strip()
     for ch in value:
         if not is_repeat(value, repeat):
             repeat += ch
@@ -44,9 +44,10 @@ def to_float(value):
     if type(value) == str:
         digit, repeat = parse_digit_from_sig(value)
         if digit is None:
-            return parse_range(value)
-        return digit, repeat
-    return value, 0
+            start, end = parse_range(value)
+            return start, end, "range"
+        return digit, repeat, "digit"
+    return value, 0, "digit"
 
 def is_empty(value):
     if type(value) == str:
@@ -56,21 +57,74 @@ def is_empty(value):
 def is_match(pred, gt):
     if is_empty(gt):
         return 1 if is_empty(pred) else 0, 1
-    pred_1, pred_2 = to_float(pred)
-    gt_1, gt_2 = to_float(gt)
+    pred_1, pred_2, pred_type = to_float(pred)
+    gt_1, gt_2, gt_type = to_float(gt)
     if gt_1 == None:
+        if is_empty(pred) or pred_1 != None:
+            return 0, 1
         return 0, 0
-    if pred_1 == gt_1 and pred_2 == gt_2:
+    if pred_1 == gt_1 and pred_2 == gt_2 and pred_type == gt_type:
         return 1, 1
     return 0, 1
 
 class TableIterator:
+    def is_split_stat(self, prev, cur):
+        return type(prev) == str and type(cur) == str and \
+               cur[:len(prev)] == prev and re.match(r"\(.*\)", cur[len(prev):].strip())
+    
     def __init__(self, df):
         self.df = df
-        self.cur_row, self.cur_col, self.main_row = 0, 0, 0
+
+        self.col_group = []
+        self.row_group = []
+        i = 0
+        while i < len(df.columns):
+            self.col_group.append([i])
+            idx = i
+            i += 1
+            while i < len(df.columns) and self.is_split_stat(df.columns[idx], df.columns[i]):
+                self.col_group[-1].append(i)
+                i += 1
+        i = 0
+        while i < len(df):
+            self.row_group.append([i])
+            idx = i
+            i += 1
+            while i < len(df) and self.is_split_stat(df.iloc[idx][0], df.iloc[i][0]):
+                self.row_group[-1].append(i)
+                i += 1
+
+        self.row_group_ptr, self.col_group_ptr = 0, 0
+        self.cur_row_in, self.cur_col_in = -1, 0
     
-    def next(self):
-        pass
+    def __iter__(self):
+        return self
+    
+    def __next__(self):
+        if self.row_group_ptr >= len(self.row_group):
+            raise StopIteration
+        
+        while True:
+            self.cur_row_in += 1
+            if self.cur_row_in >= len(self.row_group[self.row_group_ptr]):
+                self.cur_row_in = 0
+                self.cur_col_in += 1
+            if self.cur_col_in >= len(self.col_group[self.col_group_ptr]):
+                self.cur_col_in = 0
+                self.col_group_ptr += 1
+            if self.col_group_ptr >= len(self.col_group):
+                self.col_group_ptr = 0
+                self.row_group_ptr += 1
+            if self.row_group_ptr >= len(self.row_group):
+                raise StopIteration
+            row_idx = self.row_group[self.row_group_ptr][self.cur_row_in]
+            col_idx = self.col_group[self.col_group_ptr][self.cur_col_in]
+            if (self.cur_row_in != 0 or self.cur_col_in != 0) and is_empty(self.df.iloc[row_idx][col_idx]):
+                continue
+            if self.cur_row_in != 0 and col_idx == 0:
+                continue
+
+            return self.df.iloc[row_idx][col_idx]
 
 '''
 @raise:
@@ -88,33 +142,17 @@ def evaluate_table(pred_dfs, gt_dfs):
         pred_df = pred_dfs[df_ptr]
         gt_df = gt_dfs[df_ptr]
 
-        if len(pred_df.columns) != len(gt_df.columns):
-            raise FormatError(f"The predicted CSV file has {len(pred_df.columns)} columns while the ground truth CSV file has {len(gt_df.columns)} columns.")
+        pred_iter = TableIterator(pred_df)
+        gt_iter = TableIterator(gt_df)
 
-        for i in range(len(gt_df.columns)):
-            for j in range(len(gt_df)):
-                if type(gt_df.iloc[j][i]) != str:
-                    total += 1
-                else:
-                    # TODO: Is pred = nan when gt is not handled?
-                    # TODO: Handle one of them is empty and the other is not
-                    gt_digit, gt_repeat = parse_digit_from_sig(gt_df.iloc[j][i])
-                    if gt_digit is None:
-                        print("Not a data point ", gt_df.columns[i], j, gt_df.iloc[j][i])
-                        continue
+        if len(pred_iter.col_group) != len(gt_iter.col_group):
+            raise FormatError(f"The predicted CSV file has {len(pred_iter.col_group)} columns while the ground truth CSV file has {len(gt_iter.col_group)} columns.")
+        elif len(pred_iter.row_group) != len(gt_iter.row_group):
+            raise FormatError(f"The predicted CSV file has {len(pred_iter.row_group)} rows while the ground truth CSV file has {len(gt_iter.row_group)} rows.")
+        for pred_val, gt_val in zip(pred_iter, gt_iter):
+            s_inc, t_inc = is_match(pred_val, gt_val)
+            same += s_inc
+            total += t_inc
 
-                    if type(pred_df.iloc[j][i]) != str:
-                        pred_digit = pred_df.iloc[j][i]
-                        pred_repeat = 0
-                    else:
-                        pred_digit, pred_repeat = parse_digit_from_sig(pred_df.iloc[j][i])
-                    total += 1
-                    if pred_digit is None:
-                        print(MAGENTA + "Type mismatch: ", gt_df.columns[i], j, pred_df.iloc[j][i], gt_df.iloc[j][i], type(pred_df.iloc[j][i]), type(gt_df.iloc[j][i]), RESET)
-                        continue
-                    if pred_digit == gt_digit and pred_repeat == gt_repeat:
-                        same += 1
-                    else:
-                        print(BLUE + "Value mismatch: ", gt_df.columns[i], j, pred_df.iloc[j][i], gt_df.iloc[j][i], pred_digit, gt_digit, pred_repeat, gt_repeat, RESET)
     print("same: ", same, "total: ", total)
     return same / total
