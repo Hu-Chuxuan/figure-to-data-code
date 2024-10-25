@@ -1,88 +1,110 @@
+import re
 import numpy as np
 import pandas as pd
 from scipy.interpolate import interp1d
-import re
+from scipy.optimize import linear_sum_assignment
 from Exceptions import WrongCSVNumberError, FormatError, YELLOW, BLUE, MAGENTA, RESET
+from TableEvaluator import parse_range
 
-'''
-@description: if the string is in the format of "start - end" where start and end are two numbers, 
-              we can parse the start and end values
-@params: a string
-@return: start and end values, None if the string is not in the format of "start - end"
-'''
-def parse_range(value):
-    if len(value) <= 1:
-        return None, None
-    bracket_open = ["[", "(", "{", "<"]
-    bracket_close = ["]", ")", "}", ">"]
-    value = value.strip()
-    if value[0] in bracket_open and value[-1] == bracket_close[bracket_open.index(value[0])]:
-        value = value[1:-1]
-    range_dict = [",", ";", "to", "--"]
-    for range_str in range_dict:
-        if range_str in value and value.count(range_str) == 1:
-            start, end = value.split(range_str)
-            start = start.strip()
-            end = end.strip()
-            try:
-                start = float(start)
-                end = float(end)
-            except:
-                return None, None
-            return start, end
-    if "-" in value:
-        dash_indices = [i for i in range(len(value)) if value[i] == "-"]
-        if dash_indices[0] == 0:
-            split_idx = dash_indices[1]
+def process(value):
+    if type(value) == np.ndarray:
+        return value
+    if value is None or (type(value) == float and np.isnan(value)):
+        return None
+    if type(value) == str:
+        if len(value) == 0:
+            return None
+        value = value.strip()
+        start, end= parse_range(value)
+        if start is not None and end is not None:
+            return np.array([start, end], dtype=np.float64)
+    try:
+        value = float(value)
+    except:
+        pass
+    return value
+
+class Curve:
+
+    def __setattr__(self, name: str, value: list) -> None:
+        if value is None or len(value) == 0:
+            super().__setattr__(name, None)
+            return
+        for i in range(len(value)):
+            value[i] = process(value[i])
+        if type(value[0]) != str:
+            array = np.array(value, dtype=np.float64)
+            super().__setattr__(name, array)
         else:
-            split_idx = dash_indices[0]
-        start = value[:split_idx].strip()
-        end = value[split_idx+1:].strip()
+            super().__setattr__(name, value)
+
+    def __getattribute__(self, name: str) -> np.ndarray:
         try:
-            start = float(start)
-            end = float(end)
-            return start, end
-        except:
-            return None, None
-    return None, None
+            return super().__getattribute__(name)
+        except AttributeError:
+            return None
+    
+    def __len__(self):
+        if self.y is None:
+            return 0
+        return len(self.y)
+
+    def __init__(self, dict):
+        for key, value in dict.items():
+            setattr(self, key, value)
+
+    def select(self, indices):
+        if self.x is not None:
+            if type(self.x) == np.ndarray:
+                self.x = self.x[indices]
+            else:
+                self.x = None
+        if self.y is not None:
+            self.y = self.y[indices]
+        if self.err is not None:
+            self.err = self.err[indices]
+    
+    def getter(self, attributes):
+        res = []
+        for attr in attributes:
+            if hasattr(self, attr):
+                val = getattr(self, attr)
+                if val is not None:
+                    if len(val.shape) == 1:
+                        val = val.reshape(-1, 1)
+                    res.append(val)
+        return np.concatenate(res, axis=1)
+    
+    def interpolate(self, x_common):
+        y = interp1d(self.x, self.y, kind="cubic", fill_value="extrapolate")
+        self.y = y(x_common)
+        if self.err is not None:
+            err = interp1d(self.x, self.err, kind="cubic", fill_value="extrapolate")
+            self.err = err(x_common)
+        self.x = None
+
+def cost_fn(pred, gt):
+    return np.sum(np.abs(gt - pred))
+
+def is_empty(value):
+    if type(value) == str:
+        return value == ""
+    return value is None or (type(value) == float and np.isnan(value))
 
 '''
 @description: calculate the score of the pair of two values
 @return: the score of the pair. np.inf if the two values are completely different strings
 '''
 def pair_score(pred, gt):
-    # Possible types: np.float64, np.int64, str, NoneType, float
-    if pred == None or gt == None:
-        return 0 if pred == gt else np.inf, []
-    if type(gt) != str:
-        gt = float(gt)
-    if type(pred) != str:
-        pred = float(pred)
-    
-    if type(pred) != type(gt):
-        # One str and one np.float64, convert pred to type of gt
-        if type(gt) != str:
-            try:
-                pred = float(pred.strip())
-            except:
-                pred = str(pred)
-                gt = str(gt)
-        else:
-            pred = str(pred)
-    
     if type(gt) == str:
-        gt_start, gt_end = parse_range(gt)
-        if gt_start is not None and gt_end is not None:
-            pred_start, pred_end = parse_range(pred)
-            if pred_start is None and pred_end is None:
-                return np.inf, []
-            return min(abs(gt_start - pred_start), abs(gt_end - pred_end)), [(gt_start, pred_start), (gt_end, pred_end)]
-        return 0 if gt == pred else np.inf, []
-    if gt == None:
-        if pred == None:
-            return 0, []
-        return np.inf, []
-    return abs(gt - pred), [(gt, pred)]
+        return 0 if gt == pred else np.inf
+    if is_empty(pred) and is_empty(gt):
+        return 0
+    if is_empty(pred) or is_empty(gt):
+        return np.inf
+    if type(pred) != type(gt):
+        return np.inf
+    return cost_fn(pred, gt)
 
 '''
 @params:
@@ -92,36 +114,16 @@ def pair_score(pred, gt):
     pred: List, predicted values or error bars
     gt: List, ground truth values or error bars
 '''
-def pair_data_points(pred_curve, gt_curve):
-    pred_x, gt_x = [], []
-    pred_value, gt_value = [], []
-    pred_error, gt_error = [], []
-    
-    pred_paired = [False] * len(pred_curve["y"])
-    for i in range(len(gt_curve["y"])):
-        best_score = np.inf
-        best_j = np.inf
-        best_x_pairs = []
-        for j in range(len(pred_curve["y"])):
-            if pred_paired[j]:
-                continue
-            score, x_pairs = pair_score(pred_curve["x"][j], gt_curve["x"][i])
-            if score < best_score:
-                best_score = score
-                best_j = j
-                best_x_pairs = x_pairs
-        if best_score < np.inf:
-            if len(best_x_pairs) > 0:
-                for gt, pred in best_x_pairs:
-                    pred_x.append(pred)
-                    gt_x.append(gt)
-            pred_value.append(pred_curve["y"][best_j])
-            gt_value.append(gt_curve["y"][i])
-            pred_paired[best_j] = True
-            if len(gt_curve["err"]) > 0:
-                pred_error.append(pred_curve["err"][best_j])
-                gt_error.append(gt_curve["err"][i])
-    return {"x": pred_x, "y": pred_value, "err": pred_error}, {"x": gt_x, "y": gt_value, "err": gt_error}
+def pair_data_points(pred_curve: Curve, gt_curve: Curve):
+    cost_matrix = np.zeros((len(pred_curve), len(gt_curve)))
+    for i in range(len(pred_curve)):
+        for j in range(len(gt_curve)):
+            cost_matrix[i, j] = pair_score(pred_curve.x[i], gt_curve.x[j])
+    row_idx, col_idx = linear_sum_assignment(cost_matrix)
+    pred_curve.select(row_idx)
+    gt_curve.select(col_idx)
+
+    return pred_curve, gt_curve
 
 '''
 @description: Separate the data points into different curves based on the subplot and the type-2 value
@@ -167,8 +169,8 @@ def pair_curves(pred_curves, gt_curves):
         for subplot_pred, type2_pred in pred_curves.keys():
             if (subplot_pred, type2_pred) in paired:
                 continue
-            subplot_score, _ = pair_score(subplot_pred, subplot_gt)
-            type2_score, _ = pair_score(type2_pred, type2_gt)
+            subplot_score = pair_score(process(subplot_pred), process(subplot_gt))
+            type2_score = pair_score(process(type2_pred), process(type2_gt))
             score = subplot_score + type2_score
             if score < best_score:
                 best_score = score
@@ -176,9 +178,20 @@ def pair_curves(pred_curves, gt_curves):
                 best_type2_pred = type2_pred
         if best_score < np.inf:
             paired[(best_subplot_pred, best_type2_pred)] = (subplot_gt, type2_gt)
-            if subplot_gt not in paired_curves:
-                paired_curves[subplot_gt] = []
-            paired_curves[subplot_gt].append((pred_curves[(best_subplot_pred, best_type2_pred)], gt_curves[(subplot_gt, type2_gt)]))
+            pred_curve = pred_curves[(best_subplot_pred, best_type2_pred)]
+        else:
+            pred_curve = {}
+        if subplot_gt not in paired_curves:
+            paired_curves[subplot_gt] = []
+        gt_curve = gt_curves[(subplot_gt, type2_gt)]
+        paired_curves[subplot_gt].append((Curve(pred_curve), Curve(gt_curve)))
+    
+    for subplot_pred, type2_pred in pred_curves.keys():
+        if (subplot_pred, type2_pred) not in paired:
+            pred_curve = pred_curves[(subplot_pred, type2_pred)]
+            if subplot_pred not in paired_curves:
+                paired_curves[subplot_pred] = []
+            paired_curves[subplot_pred].append((Curve(pred_curve), Curve({})))
 
     return paired_curves
 
@@ -205,24 +218,36 @@ def merge_perf(perf_list):
                     overall_perf[key] = np.mean(res)
     return overall_perf
 
+'''
+@params: curves_in_subplot: Dict, subplot -> List of {"pred": Curve, "gt": Curve}
+'''
 def cal_perf(curves_in_subplot):
     curve_level_perf = {}
     for subplot, curves in curves_in_subplot.items():
         curve_level_perf[subplot] = []
         for curve in curves:
             perf = {}
-            if len(curve["x"][1]) > 0:
-                perf["X performance"] = cal_metrics(curve["x"][0], curve["x"][1])
-            if len(curve["y"][1]) > 0:
-                perf["Value performance"] = cal_metrics(curve["y"][0], curve["y"][1])
-            if len(curve["err"][1]) > 0:
-                perf["Error performance"] = cal_metrics(curve["err"][0], curve["err"][1])
-            if len(curve["x"][1]) > 0 or len(curve["err"][1]) > 0:
-                perf["Overall performance"] = cal_metrics(curve["x"][0] + curve["y"][0] + curve["err"][0], curve["x"][1] + curve["y"][1] + curve["err"][1])
-            if "gt_len" in curve.keys():
-                perf["Identified rate"] = len(curve["y"][1]) / curve["gt_len"]
-            if "pred_len" in curve.keys():
-                perf["Identified recall"] = len(curve["y"][1]) / curve["pred_len"]
+            if len(curve["gt"]) != 0 and len(curve["pred"]) != 0:
+                if curve["gt"].x is not None:
+                    perf["X performance"] = cal_metrics(curve["pred"].x, curve["gt"].x)
+                perf["Value performance"] = cal_metrics(curve["pred"].y, curve["gt"].y)
+                if curve["gt"].err is not None:
+                    perf["Error performance"] = cal_metrics(curve["pred"].err, curve["gt"].err)
+                if curve["gt"].x is not None or curve["gt"].err is not None:
+                    perf["Overall performance"] = cal_metrics(
+                        curve["pred"].getter(["x", "y", "err"]),
+                        curve["gt"].getter(["x", "y", "err"])
+                    )
+            if "gt_len" in curve:
+                if curve["gt_len"] == 0:
+                    perf["Identified rate"] = 0
+                else:
+                    perf["Identified rate"] = len(curve["gt"]) / curve["gt_len"]
+            if "pred_len" in curve:
+                if curve["pred_len"] == 0:
+                    perf["Identified recall"] = 0
+                else:
+                    perf["Identified recall"] = len(curve["gt"]) / curve["pred_len"]
             curve_level_perf[subplot].append(perf)
     subplot_level_perf = []
     for subplot, curve_perf in curve_level_perf.items():
@@ -230,8 +255,6 @@ def cal_perf(curves_in_subplot):
     return merge_perf(subplot_level_perf)
 
 def cal_metrics(pred_values, gt_values):
-    pred_values = np.array(pred_values)
-    gt_values = np.array(gt_values)
     # Mean Absolute Error
     mae = np.mean(np.abs(pred_values - gt_values))
     # Mean Absolute Percentage Error
@@ -249,14 +272,6 @@ def cal_metrics(pred_values, gt_values):
     r_2 = 1 - np.sum((pred_values - gt_values) ** 2) / np.sum((gt_values - np.mean(gt_values)) ** 2)
 
     return {"MAE": mae, "MAPE": mape, "MAPE_eps": mape_eps, "SMAPE": smape, "MASE": mase, "R-squared": r_2}
-
-def interpolate(pred_x, pred_y, gt_x, gt_y):
-    pred_interp = interp1d(pred_x, pred_y, kind="cubic", fill_value="extrapolate")
-    gt_interp = interp1d(gt_x, gt_y, kind="cubic", fill_value="extrapolate")
-    x_common = np.linspace(min(min(pred_x), min(gt_x)), max(max(pred_x), max(gt_x)), num=50)
-    pred_y_common = pred_interp(x_common)
-    gt_y_common = gt_interp(x_common)
-    return x_common, pred_y_common, gt_y_common
 
 '''
 @raise: 
@@ -289,27 +304,25 @@ def evaluate_plot(pred_df, gt_df):
         curves = []
         for curve_pair in curve_pairs:
             pred_curve, gt_curve = curve_pair[pred_idx], curve_pair[gt_idx]
-            if len(gt_curve["y"]) >= 50:
+            if len(gt_curve) >= 50:
                 # This is a continuous plot
-                _, pred_y_resample, gt_y_resample = interpolate(pred_curve["x"], pred_curve["y"], gt_curve["x"], gt_curve["y"])
-                curves.append({"x": ([], []), "y": (pred_y_resample, gt_y_resample)})
-                if "err" in gt_curve.keys() and len(gt_curve["err"]) > 0:
-                    _, pred_err_resample, gt_err_resample = interpolate(pred_curve["x"], pred_curve["err"], gt_curve["x"], gt_curve["err"])
-                    curves[-1]["err"] = (pred_err_resample, gt_err_resample)
-                else:
-                    curves[-1]["err"] = ([], [])
+                x_common = np.linspace(
+                    min(min(pred_curve.x), min(gt_curve.x)), 
+                    max(max(pred_curve.x), max(gt_curve.x)), num=50)
+                pred_curve.interpolate(x_common)
+                gt_curve.interpolate(x_common)
+                curves.append({"pred": pred_curve, "gt": gt_curve})
             else:
                 # This is a discrete plot
-                if len(gt_curve["y"]) <= len(pred_curve["y"]):
+                gt_len = len(gt_curve)
+                pred_len = len(pred_curve)
+                if gt_len <= pred_len:
                     paired_pred_curve, paired_gt_curve = pair_data_points(pred_curve, gt_curve)
                 else:
                     paired_gt_curve, paired_pred_curve = pair_data_points(gt_curve, pred_curve)
                 curves.append({
-                    "x": (paired_pred_curve["x"], paired_gt_curve["x"]), 
-                    "y": (paired_pred_curve["y"], paired_gt_curve["y"]), 
-                    "err": (paired_pred_curve["err"], paired_gt_curve["err"]),
-                    "gt_len": len(gt_curve["y"]),
-                    "pred_len": len(pred_curve["y"])
+                    "pred": paired_pred_curve, "gt": paired_gt_curve,
+                    "gt_len": gt_len, "pred_len": pred_len
                 })
         curves_in_subplot[subplot_gt] = curves
 
