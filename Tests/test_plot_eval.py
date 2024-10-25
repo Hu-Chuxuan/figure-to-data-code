@@ -4,7 +4,7 @@ import sys, os
 import numpy as np
 
 sys.path.append(os.path.abspath(os.path.dirname(os.path.abspath(os.path.dirname(__file__)))))
-from PlotEvaluator import evaluate_plot, cal_perf, merge_perf, cal_metrics, pair_score, pair_curves, pair_data_points
+from PlotEvaluator import evaluate_plot, cal_perf, merge_perf, cal_metrics, pair_score, pair_curves, pair_data_points, Curve, process
 
 class TestPlotEvaluator(unittest.TestCase):
     def assertSameDict(self, pred, gt):
@@ -128,19 +128,24 @@ class TestPlotEvaluatorCalPerf(TestPlotEvaluator):
         self.assertSameDict(merge_perf(perf_list), ans)
 
     def test_cal_perf(self):
-        pred_value = [-0.15, -0.1, -0.05, 0.0, 0.1, 0.05]
-        pred_err = [0.1, 0.08, 0.12, 0.07, 0.09, 0.06]
-        gt_value = [-0.1957403651115618, -0.3600405679513184, -0.061866125760649, -0.1369168356997971, 0.0740365111561865, 0.0801217038539553]
-        gt_err = [0.2251521298174442, 0.2718052738336714, 0.1176470588235294, 0.1440162271805274, 0.2393509127789046, 0.2900608519269776]
+        pred_value = np.array([-0.15, -0.1, -0.05, 0.0, 0.1, 0.05])
+        pred_err = np.array([0.1, 0.08, 0.12, 0.07, 0.09, 0.06])
+        gt_value = np.array([-0.1957403651115618, -0.3600405679513184, -0.061866125760649, -0.1369168356997971, 0.0740365111561865, 0.0801217038539553])
+        gt_err = np.array([0.2251521298174442, 0.2718052738336714, 0.1176470588235294, 0.1440162271805274, 0.2393509127789046, 0.2900608519269776])
         curves_in_subplot = {
             "1": [
-                { "x": ([], []), "y": (pred_value, gt_value), "err": (pred_err, gt_err), "gt_len": 10, "pred_len": 6 }
+                { "pred": Curve({"y": pred_value, "err": pred_err}),
+                  "gt": Curve({"y": gt_value, "err": gt_err}), 
+                  "gt_len": 10, "pred_len": 6 
+                }
             ]
         }
         ans = {
             "Value performance": cal_metrics(pred_value, gt_value),
             "Error performance": cal_metrics(pred_err, gt_err),
-            "Overall performance": cal_metrics(pred_value + pred_err, gt_value + gt_err),
+            "Overall performance": cal_metrics(
+                np.concatenate([pred_value.reshape(-1, 1), pred_err.reshape(-1, 1)], axis=1), 
+                np.concatenate([gt_value.reshape(-1, 1), gt_err.reshape(-1, 1)], axis=1)),
             "Identified rate": 0.6,
             "Identified recall": 1.0
         }
@@ -153,21 +158,25 @@ class TestPlotEvaluatorCalPerf(TestPlotEvaluator):
         gt_value = [[84.06889128094726, 79.1173304628633, 70.18299246501616, 61.14101184068892, 57.91173304628633], [25.188374596340154, 21.95909580193758, 15.931108719052745, 13.024757804090413, 12.917115177610327]]
         curves_in_subplot = {
             "1": [
-                {"x": (pred_x[0], gt_x[0]), "y": (pred_value[0], gt_value[0]), "err": ([], []), "gt_len": 5, "pred_len": 5},
-                {"x": (pred_x[1], gt_x[1]), "y": (pred_value[1], gt_value[1]), "err": ([], []), "gt_len": 10, "pred_len": 8}
+                { "gt": Curve({"x": gt_x[0], "y": gt_value[0]}), 
+                  "pred": Curve({"x": pred_x[0], "y": pred_value[0]}), 
+                  "gt_len": 5, "pred_len": 5 },
+                { "gt": Curve({"x": gt_x[1], "y": gt_value[1]}), 
+                  "pred": Curve({"x": pred_x[1], "y": pred_value[1]}), 
+                  "gt_len": 10, "pred_len": 8 }
             ]
         }
         first_curve = {
-            "X performance": cal_metrics(pred_x[0], gt_x[0]),
-            "Value performance": cal_metrics(pred_value[0], gt_value[0]),
-            "Overall performance": cal_metrics(pred_x[0] + pred_value[0], gt_x[0] + gt_value[0]),
+            "X performance": cal_metrics(np.array(pred_x[0]), np.array(gt_x[0])),
+            "Value performance": cal_metrics(np.array(pred_value[0]), np.array(gt_value[0])),
+            "Overall performance": cal_metrics(np.array(pred_x[0] + pred_value[0]), np.array(gt_x[0] + gt_value[0])),
             "Identified rate": 1.0,
             "Identified recall": 1.0
         }
         second_curve = {
-            "X performance": cal_metrics(pred_x[1], gt_x[1]),
-            "Value performance": cal_metrics(pred_value[1], gt_value[1]),
-            "Overall performance": cal_metrics(pred_x[1] + pred_value[1], gt_x[1] + gt_value[1]),
+            "X performance": cal_metrics(np.array(pred_x[1]), np.array(gt_x[1])),
+            "Value performance": cal_metrics(np.array(pred_value[1]), np.array(gt_value[1])),
+            "Overall performance": cal_metrics(np.array(pred_x[1] + pred_value[1]), np.array(gt_x[1] + gt_value[1])),
             "Identified rate": 0.5,
             "Identified recall": 0.625
         }
@@ -192,23 +201,23 @@ class TestPlotEvaluatorCalPerf(TestPlotEvaluator):
         gt_value = [[84.06889128094726, 79.1173304628633, 70.18299246501616, 61.14101184068892, 57.91173304628633], [25.188374596340154, 21.95909580193758, 15.931108719052745, 13.024757804090413, 12.917115177610327]]
         curves_in_subplot = {
             "1": [
-                {"x": (pred_x[0], gt_x[0]), "y": (pred_value[0], gt_value[0]), "err": ([], []), "gt_len": 5, "pred_len": 5},
+                {"gt": Curve({"x": gt_x[0], "y": gt_value[0]}), "pred": Curve({"x": pred_x[0], "y": pred_value[0]}), "gt_len": 5, "pred_len": 5},
             ],
             "2": [
-                {"x": (pred_x[1], gt_x[1]), "y": (pred_value[1], gt_value[1]), "err": ([], []), "gt_len": 10, "pred_len": 8}
+                {"gt": Curve({"x": gt_x[1], "y": gt_value[1]}), "pred": Curve({"x": pred_x[1], "y": pred_value[1]}), "gt_len": 10, "pred_len": 8}
             ]
         }
         first_curve = {
-            "X performance": cal_metrics(pred_x[0], gt_x[0]),
-            "Value performance": cal_metrics(pred_value[0], gt_value[0]),
-            "Overall performance": cal_metrics(pred_x[0] + pred_value[0], gt_x[0] + gt_value[0]), 
+            "X performance": cal_metrics(np.array(pred_x[0]), np.array(gt_x[0])),
+            "Value performance": cal_metrics(np.array(pred_value[0]), np.array(gt_value[0])),
+            "Overall performance": cal_metrics(np.array(pred_x[0] + pred_value[0]), np.array(gt_x[0] + gt_value[0])), 
             "Identified rate": 1.0,
             "Identified recall": 1.0
         }
         second_curve = {
-            "X performance": cal_metrics(pred_x[1], gt_x[1]),
-            "Value performance": cal_metrics(pred_value[1], gt_value[1]),
-            "Overall performance": cal_metrics(pred_x[1] + pred_value[1], gt_x[1] + gt_value[1]),
+            "X performance": cal_metrics(np.array(pred_x[1]), np.array(gt_x[1])),
+            "Value performance": cal_metrics(np.array(pred_value[1]), np.array(gt_value[1])),
+            "Overall performance": cal_metrics(np.array(pred_x[1] + pred_value[1]), np.array(gt_x[1] + gt_value[1])),
             "Identified rate": 0.5,
             "Identified recall": 0.625
         }
@@ -227,7 +236,7 @@ class TestPlotEvaluatorCalPerf(TestPlotEvaluator):
         self.assertSameDict(cal_perf(curves_in_subplot), ans)
 
     def test_cal_perf_multi_subplot_multi_curve(self):
-        pred_x = [[1995, 2000, 2005, 2010, 2015], [1995, 2000, 2005, 2010, 2015], [1, 2, 3, 4]]
+        pred_x = [[1995, 2000, 2005, 2010, 2015], [1995, 2000, 2005, 2010, 2015]]
         pred_value = [[85, 80, 75, 70, 65], [25, 22, 20, 18, 15], [-0.15, -0.1, -0.05, 0.0]]
         gt_x = [[1995, 2000, 2005, 2010, 2012], [1995, 2000, 2005, 2010, 2012]]
         gt_value = [[84.06889128094726, 79.1173304628633, 70.18299246501616, 61.14101184068892, 57.91173304628633], [25.188374596340154, 21.95909580193758, 15.931108719052745, 13.024757804090413, 12.917115177610327], [-0.1957403651115618, -0.3600405679513184, -0.061866125760649, -0.1369168356997971]]
@@ -236,30 +245,30 @@ class TestPlotEvaluatorCalPerf(TestPlotEvaluator):
 
         curves_in_subplot = {
             "1": [
-                {"x": (pred_x[0], gt_x[0]), "y": (pred_value[0], gt_value[0]), "err": ([], []), "gt_len": 5, "pred_len": 5},
-                {"x": (pred_x[1], gt_x[1]), "y": (pred_value[1], gt_value[1]), "err": ([], []), "gt_len": 10, "pred_len": 8}
+                {"gt": Curve({"x": gt_x[0], "y": gt_value[0]}), "pred": Curve({"x": pred_x[0], "y": pred_value[0]}), "gt_len": 5, "pred_len": 5},
+                {"gt": Curve({"x": gt_x[1], "y": gt_value[1]}), "pred": Curve({"x": pred_x[1], "y": pred_value[1]}), "gt_len": 10, "pred_len": 8}
             ], 
             "2": [
-                {"x": ([], []), "y": (pred_value[2], gt_value[2]), "err": (pred_err, gt_err), "gt_len": 16, "pred_len": 20}
+                { "gt": Curve({"y": gt_value[2], "err": gt_err}), "pred": Curve({"y": pred_value[2], "err": pred_err}), "gt_len": 16, "pred_len": 20 }
             ]
         }
 
         curves = [{}, {}, {}]
-        curves[0]["X performance"] = cal_metrics(pred_x[0], gt_x[0])
-        curves[0]["Value performance"] = cal_metrics(pred_value[0], gt_value[0])
-        curves[0]["Overall performance"] = cal_metrics(pred_x[0] + pred_value[0], gt_x[0] + gt_value[0])
+        curves[0]["X performance"] = cal_metrics(np.array(pred_x[0]), np.array(gt_x[0]))
+        curves[0]["Value performance"] = cal_metrics(np.array(pred_value[0]), np.array(gt_value[0]))
+        curves[0]["Overall performance"] = cal_metrics(np.array(pred_x[0] + pred_value[0]), np.array(gt_x[0] + gt_value[0]))
         curves[0]["Identified rate"] = 1.0
         curves[0]["Identified recall"] = 1.0
 
-        curves[1]["X performance"] = cal_metrics(pred_x[1], gt_x[1])
-        curves[1]["Value performance"] = cal_metrics(pred_value[1], gt_value[1])
-        curves[1]["Overall performance"] = cal_metrics(pred_x[1] + pred_value[1], gt_x[1] + gt_value[1])
+        curves[1]["X performance"] = cal_metrics(np.array(pred_x[1]), np.array(gt_x[1]))
+        curves[1]["Value performance"] = cal_metrics(np.array(pred_value[1]), np.array(gt_value[1]))
+        curves[1]["Overall performance"] = cal_metrics(np.array(pred_x[1] + pred_value[1]), np.array(gt_x[1] + gt_value[1]))
         curves[1]["Identified rate"] = 0.5
         curves[1]["Identified recall"] = 0.625
 
-        curves[2]["Value performance"] = cal_metrics(pred_value[2], gt_value[2])
-        curves[2]["Error performance"] = cal_metrics(pred_err, gt_err)
-        curves[2]["Overall performance"] = cal_metrics(pred_value[2] + pred_err, gt_value[2] + gt_err)
+        curves[2]["Value performance"] = cal_metrics(np.array(pred_value[2]), np.array(gt_value[2]))
+        curves[2]["Error performance"] = cal_metrics(np.array(pred_err), np.array(gt_err))
+        curves[2]["Overall performance"] = cal_metrics(np.array(pred_value[2] + pred_err), np.array(gt_value[2] + gt_err))
         curves[2]["Identified rate"] = 4/16
         curves[2]["Identified recall"] = 4/20
 
@@ -278,16 +287,251 @@ class TestPlotEvaluatorCalPerf(TestPlotEvaluator):
         }
         self.assertSameDict(cal_perf(curves_in_subplot), ans)
 
+    def test_cal_perf_missing_or_extra_curve(self):
+        pred_x = [[1995, 2000, 2005, 2010, 2015], [1995, 2000, 2005, 2010, 2015]]
+        pred_value = [[85, 80, 75, 70, 65], [25, 22, 20, 18, 15]]
+        gt_x = [[1995, 2000, 2005, 2010, 2012], [1995, 2000, 2005, 2010, 2012]]
+        gt_value = [[84.06889128094726, 79.1173304628633, 70.18299246501616, 61.14101184068892, 57.91173304628633], [25.188374596340154, 21.95909580193758, 15.931108719052745, 13.024757804090413, 12.917115177610327]]
+
+        curves_in_subplot = {
+            "1": [
+                {
+                    "gt": Curve({"x": gt_x[0], "y": gt_value[0]}),
+                    "pred": Curve({"x": pred_x[0], "y": pred_value[0]}),
+                    "gt_len": 5, "pred_len": 5
+                },
+                {
+                    "gt": Curve({"x": gt_x[1], "y": gt_value[1]}),
+                    "pred": Curve({"x": pred_x[1], "y": pred_value[1]}),
+                    "gt_len": 5, "pred_len": 5
+                },
+                { "gt": Curve({}), "pred": Curve({}), "gt_len": 5, "pred_len": 0 }
+            ]
+        }
+        curves = [
+            {
+                "X performance": cal_metrics(np.array(pred_x[0]), np.array(gt_x[0])),
+                "Value performance": cal_metrics(np.array(pred_value[0]), np.array(gt_value[0])),
+                "Overall performance": cal_metrics(np.array(pred_x[0] + pred_value[0]), np.array(gt_x[0] + gt_value[0])),
+                "Identified rate": 1.0,
+                "Identified recall": 1.0
+            },
+            {
+                "X performance": cal_metrics(np.array(pred_x[1]), np.array(gt_x[1])),
+                "Value performance": cal_metrics(np.array(pred_value[1]), np.array(gt_value[1])),
+                "Overall performance": cal_metrics(np.array(pred_x[1] + pred_value[1]), np.array(gt_x[1] + gt_value[1])),
+                "Identified rate": 1.0,
+                "Identified recall": 1.0
+            },
+            {
+                "Identified rate": 0.0,
+                "Identified recall": 0.0
+            }
+        ]
+        merged_x, merged_v, merged_overall = {}, {}, {}
+        for key in curves[0]["X performance"].keys():
+            merged_x[key] = (curves[0]["X performance"][key] + curves[1]["X performance"][key]) / 2
+            merged_v[key] = (curves[0]["Value performance"][key] + curves[1]["Value performance"][key]) / 2
+            merged_overall[key] = (curves[0]["Overall performance"][key] + curves[1]["Overall performance"][key]) / 2
+        ans = {
+            "X performance": merged_x,
+            "Value performance": merged_v,
+            "Overall performance": merged_overall,
+            "Identified rate": (curves[0]["Identified rate"] + curves[1]["Identified rate"]) / 3,
+            "Identified recall": (curves[0]["Identified recall"] + curves[1]["Identified recall"]) / 3
+        }
+        self.assertSameDict(cal_perf(curves_in_subplot), ans)
+
+        curves_in_subplot["1"][-1]["gt_len"] = 0
+        curves_in_subplot["1"][-1]["pred_len"] = 5
+        self.assertSameDict(cal_perf(curves_in_subplot), ans)
+
+    def test_cal_perf_missing_or_extra_subplot(self):
+        pred_x = [[1995, 2000, 2005, 2010, 2015], [1995, 2000, 2005, 2010, 2015]]
+        pred_value = [[85, 80, 75, 70, 65], [25, 22, 20, 18, 15]]
+        gt_x = [[1995, 2000, 2005, 2010, 2012], [1995, 2000, 2005, 2010, 2012]]
+        gt_value = [[84.06889128094726, 79.1173304628633, 70.18299246501616, 61.14101184068892, 57.91173304628633], [25.188374596340154, 21.95909580193758, 15.931108719052745, 13.024757804090413, 12.917115177610327]]
+
+        curves_in_subplot = {
+            "1": [
+                {
+                    "gt": Curve({"x": gt_x[0], "y": gt_value[0]}),
+                    "pred": Curve({"x": pred_x[0], "y": pred_value[0]}),
+                    "gt_len": 5, "pred_len": 5
+                },
+                {
+                    "gt": Curve({"x": gt_x[1], "y": gt_value[1]}),
+                    "pred": Curve({"x": pred_x[1], "y": pred_value[1]}),
+                    "gt_len": 5, "pred_len": 5
+                }
+            ],
+            "2": [ { "gt": Curve({}), "pred": Curve({}), "gt_len": 5, "pred_len": 0 } ]
+        }
+        curves = [
+            {
+                "X performance": cal_metrics(np.array(pred_x[0]), np.array(gt_x[0])),
+                "Value performance": cal_metrics(np.array(pred_value[0]), np.array(gt_value[0])),
+                "Overall performance": cal_metrics(np.array(pred_x[0] + pred_value[0]), np.array(gt_x[0] + gt_value[0])),
+                "Identified rate": 1.0,
+                "Identified recall": 1.0
+            },
+            {
+                "X performance": cal_metrics(np.array(pred_x[1]), np.array(gt_x[1])),
+                "Value performance": cal_metrics(np.array(pred_value[1]), np.array(gt_value[1])),
+                "Overall performance": cal_metrics(np.array(pred_x[1] + pred_value[1]), np.array(gt_x[1] + gt_value[1])),
+                "Identified rate": 1.0,
+                "Identified recall": 1.0
+            },
+            {
+                "Identified rate": 0.0,
+                "Identified recall": 0.0
+            }
+        ]
+        merged_x, merged_v, merged_overall = {}, {}, {}
+        for key in curves[0]["X performance"].keys():
+            merged_x[key] = (curves[0]["X performance"][key] + curves[1]["X performance"][key]) / 2
+            merged_v[key] = (curves[0]["Value performance"][key] + curves[1]["Value performance"][key]) / 2
+            merged_overall[key] = (curves[0]["Overall performance"][key] + curves[1]["Overall performance"][key]) / 2
+        ans = {
+            "X performance": merged_x,
+            "Value performance": merged_v,
+            "Overall performance": merged_overall,
+            "Identified rate": (curves[0]["Identified rate"] + curves[1]["Identified rate"]) / 2 / 2,
+            "Identified recall": (curves[0]["Identified recall"] + curves[1]["Identified recall"]) / 2 / 2
+        }
+        self.assertSameDict(cal_perf(curves_in_subplot), ans)
+
+        curves_in_subplot["2"][0]["gt_len"] = 0
+        curves_in_subplot["2"][0]["pred_len"] = 5
+        self.assertSameDict(cal_perf(curves_in_subplot), ans)
+
 class TestPlotEvaluatorPairing(TestPlotEvaluator):
     def test_pair_score(self):
-        pass
+        names = {
+            "str": ["A", "B", "C"],
+            "range": ["1 - 2", "1 - 3", "2 - 3", "2 - 4", "3 - 4"],
+            "float": [3.14-20, 3.14-10, 3.14, 3.14+10, "-16.86", "-6.86", "3.14", "13.14"],
+            "int": [-2, -1, 0, 1, 2, "-2", "-1", "0", "1", "2"],
+            "NoneType": [None, np.nan, ""]
+        }
+        for type_pred in names:
+            for type_gt in names:
+                for i, name_pred in enumerate(names[type_pred]):
+                    for j, name_gt in enumerate(names[type_gt]):
+                        data_score = pair_score(process(name_pred), process(name_gt))
+                        # curve_score = pair_score(name_pred, name_gt)
+                        if type_gt != type_pred and type_gt in ["float", "int"] and type_pred in ["float", "int"]:
+                            continue
+                        if type_gt != type_pred:
+                            self.assertEqual(data_score, np.inf)
+                            # self.assertEqual(curve_score, np.inf)
+                        elif type_gt == "range":
+                            self.assertEqual(data_score, abs(i - j))
+                            # self.assertEqual(curve_score, 0 if i == j else np.inf)
+                        elif type_gt == "str":
+                            self.assertEqual(data_score, 0 if i == j else np.inf)
+                            # self.assertEqual(curve_score, 0 if i == j else np.inf)
+                        elif type_gt == "float":
+                            self.assertAlmostEqual(data_score, 0 if i % 4 == j % 4 else abs(i%4 - j%4)*10)
+                            # self.assertAlmostEqual(curve_score, abs(i%4 - j%4)*10 if ((i < 4 and j < 4) or i == j) else np.inf)
+                        elif type_gt == "int":
+                            self.assertEqual(data_score, 0 if i % 5 == j % 5 else abs(i%5 - j%5))
+                            # self.assertEqual(curve_score, abs(i%5 - j%5) if ((i < 5 and j < 5) or i == j) else np.inf)
+                        elif type_gt == "NoneType":
+                            self.assertEqual(data_score, 0)
 
+    def gen_curves(self, curve_num):
+        curves = {}
+        for i, num in enumerate(curve_num):
+            for j in range(num):
+                curves[(chr(65+i), str(j+1))] = {"y": list(range(i*10+j+1))}
+        return curves
+    
+    def gen_ans(self, curve_num):
+        ans = {}
+        for i, num in enumerate(curve_num):
+            ans[chr(65+i)] = []
+            for j in range(num):
+                ans[chr(65+i)].append((Curve({"y": list(range(i*10+j+1))}), Curve({"y": list(range(i*10+j+1))})))
+        return ans
+    
+    def assertSameCurvePair(self, pair1, pair2):
+        self.assertEqual(list(pair1.keys()), list(pair2.keys()))
+        for key in pair1.keys():
+            self.assertEqual(len(pair1[key]), len(pair2[key]))
+            for i in range(len(pair1[key])):
+                self.assertEqual(len(pair1[key][i]), len(pair2[key][i]))
+    
     def test_pair_curves(self):
-        pass
+        curve_num = [2, 1, 3]
+        pred_curves = self.gen_curves(curve_num)
+        gt_curves = self.gen_curves(curve_num)
+        paired_curves = pair_curves(pred_curves, gt_curves)
+        ans = self.gen_ans(curve_num)
+        self.assertSameCurvePair(paired_curves, ans)
 
-    def test_pair_data_points(self):
+    def test_pair_missing_curve(self):
+        curve_num = [2, 1, 3]
+        pred_curves = self.gen_curves(curve_num)
+        gt_curves = self.gen_curves(curve_num)
+        del pred_curves[("C", "2")]
+        paired_curves = pair_curves(pred_curves, gt_curves)
+
+        ans = self.gen_ans(curve_num)
+        ans["C"][1] = (Curve({}), Curve({"y": list(range(20, 23))}))
+        self.assertSameCurvePair(paired_curves, ans)
+
+    def test_pair_extra_curve(self):
+        pred_curves = self.gen_curves([2, 2, 3])
+        gt_curves = self.gen_curves([2, 1, 3])
+        paired_curves = pair_curves(pred_curves, gt_curves)
+
+        ans = self.gen_ans([2, 2, 3])
+        ans["B"][1] = (ans["B"][1][0], Curve({}))
+        self.assertSameCurvePair(paired_curves, ans)
+    
+    def test_pair_missing_subplot(self):
+        pred_curves = self.gen_curves([2, 1])
+        gt_curves = self.gen_curves([2, 1, 3])
+        paired_curves = pair_curves(pred_curves, gt_curves)
+
+        ans = self.gen_ans([2, 1, 3])
+        new_c = []
+        for _, gt_c in ans["C"]:
+            new_c.append((Curve({}), gt_c))
+        ans["C"] = new_c
+        self.assertSameCurvePair(paired_curves, ans)
+
+    def test_pair_extra_subplot(self):
+        pred_curves = self.gen_curves([2, 1, 3])
+        gt_curves = self.gen_curves([2, 1])
+        paired_curves = pair_curves(pred_curves, gt_curves)
+
+        ans = self.gen_ans([2, 1, 3])
+        new_c = []
+        for pred_c, _ in ans["C"]:
+            new_c.append((pred_c, Curve({})))
+        ans["C"] = new_c
+        self.assertSameCurvePair(paired_curves, ans)
+
+    def DISABLE_test_pair_data_points(self):
         pass
     
+    def DISABLE_test_cross_pairing(self):
+        # histogram + multiple panels + no type-2
+        pred = pd.read_csv("Tests/evaluator/P-14-O2_pred.csv")
+        gt = pd.read_csv("Tests/evaluator/P-14-O2_gt.csv")
+        perf = evaluate_plot([pred], [gt])
+
+        pred_x = [(1995, 1996), (1997, 1998), (1999, 2000), (2001, 2002), (2003, 2004), (2005, 2006), (2007, 2008), (2009, 2010), (2011, 2012), (2013, 2014)]
+        pred_value = [0.05, 0.03, 0.15, 0.08, 0.22, 0.07, 0.13, 0.06, 0.04, 0.02]
+        gt_x = [(1996.0, 1997.0), (1998.0, 1999.0), (1999.0, 2000.0), (2000.0, 2001.0), (2001.0, 2002.), (2003.0, 2004.0), (2004.0, 2005.0), (2007.0, 2008.0), (2008.0, 2009.0), (2009.0, 2010.0), (2012.0, 2013.0)]
+        gt_value = [0.0447214076246334, 0.0271260997067449, 0.1590909090909091, 0.05058651026392966, 0.0843108504398827, 0.2155425219941349, 0.0659824046920821, 0.1422287390029326, 0.123900293255132, 0.0645161290322581, 0.0344574780058651]
+
+        pre_curve = Curve({"x": pred_x, "y": pred_value})
+        gt_curve = Curve({"x": gt_x, "y": gt_value})
+        pred_pair, gt_pair = pair_data_points(pre_curve, gt_curve)
+
 class TestPlotEvaluatorGeneral(TestPlotEvaluator):
     def test_discrete_err(self):
         # dot plot + error bars + multiple curves 
@@ -304,16 +548,14 @@ class TestPlotEvaluatorGeneral(TestPlotEvaluator):
         curves_in_subplot = {
             "1": [
                 {
-                    "x": ([], []),
-                    "y": (pred_value[0], gt_value[0]),
-                    "err": (pred_err[0], gt_err[0]),
+                    "gt": Curve({"y": gt_value[0], "err": gt_err[0]}),
+                    "pred": Curve({"y": pred_value[0], "err": pred_err[0]}),
                     "gt_len": 3,
                     "pred_len": 3
                 },
                 {
-                    "x": ([], []),
-                    "y": (pred_value[1], gt_value[1]),
-                    "err": (pred_err[1], gt_err[1]),
+                    "gt": Curve({"y": gt_value[1], "err": gt_err[1]}),
+                    "pred": Curve({"y": pred_value[1], "err": pred_err[1]}),
                     "gt_len": 3,
                     "pred_len": 3
                 }
@@ -327,16 +569,15 @@ class TestPlotEvaluatorGeneral(TestPlotEvaluator):
         gt = pd.read_csv("Tests/evaluator/P-10-O1_gt.csv")
         perf = evaluate_plot([pred], [gt])
         
-        pred_x = [0.0, 0.1, 0.1, 0.2, 0.2, 0.3, 0.3, 0.4, 0.4, 0.5, 0.5, 0.6, 0.6, 0.7, 0.7, 0.8, 0.8, 0.9, 0.9, 1.0]
+        pred_x = [(0.0, 0.1), (0.1, 0.2), (0.2, 0.3), (0.3, 0.4), (0.4, 0.5), (0.5, 0.6), (0.6, 0.7), (0.7, 0.8), (0.8, 0.9), (0.9, 1.0)]
         pred_value = [75, 75, 85, 95, 80, 20, 5, 0, 5, 5]
-        gt_x = [0.0, 0.1, 0.1, 0.2, 0.2, 0.3, 0.3, 0.4, 0.4, 0.5, 0.5, 0.6, 0.6, 0.7, 0.7, 0.8, 0.8, 0.9, 0.9, 1.0]
+        gt_x = [(0.0, 0.1), (0.1, 0.2), (0.2, 0.3), (0.3, 0.4), (0.4, 0.5), (0.5, 0.6), (0.6, 0.7), (0.7, 0.8), (0.8, 0.9), (0.9, 1.0)]
         gt_value = [65.97087378640776, 64.95145631067962, 79.80582524271844, 88.10679611650485, 70.04854368932038, 21.99029126213592, 5.825242718446603, 1.893203883495147, 1.0194174757281471, 3.932038834951456]
         curves_in_subplot = {
             "1": [
                 {
-                    "x": (pred_x, gt_x),
-                    "y": (pred_value, gt_value),
-                    "err": ([], []),
+                    "gt": Curve({"x": gt_x, "y": gt_value}),
+                    "pred": Curve({"x": pred_x, "y": pred_value}),
                     "gt_len": 10,
                     "pred_len": 10
                 }
@@ -344,23 +585,42 @@ class TestPlotEvaluatorGeneral(TestPlotEvaluator):
         }
         self.assertSameDict(perf, cal_perf(curves_in_subplot))
 
-    def DISABLE_test_cont_simple(self):
+    def test_cont_simple(self):
         # continuous plot + multiple curves + no subplot valuez
         pred = pd.read_csv("Tests/evaluator/P-20-O1_pred.csv")
         gt = pd.read_csv("Tests/evaluator/P-20-O1_gt.csv")
         perf = evaluate_plot([pred], [gt])
-        print(self._testMethodName, perf)
-
-    def test_cross_pairing(self):
-        # histogram + multiple panels + no type-2
-        pred = pd.read_csv("Tests/evaluator/P-14-O2_pred.csv")
-        gt = pd.read_csv("Tests/evaluator/P-14-O2_gt.csv")
-        perf = evaluate_plot([pred], [gt])
-
-        pred_x = [1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014]
-        pred_value = [0.05, 0.03, 0.15, 0.08, 0.22, 0.07, 0.13, 0.06, 0.04, 0.02]
-        gt_x = [1996.0, 1997.0, 1998.0, 1999.0, 1999.0, 2000.0, 2001.0, 2002.0, 2003.0, 2004.0, 2004.0, 2005.0, 2007.0, 2008.0, 2008.0, 2009.0, 2009.0, 2010.0, 2012.0, 2013.0]
-        gt_value = [0.0447214076246334, 0.0271260997067449, 0.1590909090909091, 0.0843108504398827, 0.2155425219941349, 0.0659824046920821, 0.1422287390029326, 0.123900293255132, 0.0645161290322581, 0.0344574780058651]
+        
+        pred_x, pred_y = [[], []], [[], []]
+        for i in range(len(pred)):
+            if pred["Type-2"][i] == "Treatment":
+                pred_x[0].append(pred["Type-1"][i])
+                pred_y[0].append(pred["Value"][i])
+            else:
+                pred_x[1].append(pred["Type-1"][i])
+                pred_y[1].append(pred["Value"][i])
+        gt_x, gt_y = [[], []], [[], []]
+        for i in range(len(gt)):
+            if gt["Type-2"][i] == "Treatment":
+                gt_x[0].append(gt["Type-1"][i])
+                gt_y[0].append(gt["Value"][i])
+            else:
+                gt_x[1].append(gt["Type-1"][i])
+                gt_y[1].append(gt["Value"][i])
+        pred_curves = [Curve({"x": pred_x[0], "y": pred_y[0]}), Curve({"x": pred_x[1], "y": pred_y[1]})]
+        gt_curves = [Curve({"x": gt_x[0], "y": gt_y[0]}), Curve({"x": gt_x[1], "y": gt_y[1]})]
+        x_common = [np.linspace(0, 259.99999999999994, num=50), np.linspace(0, 257.49999999999994, num=50)]
+        pred_curves[0].interpolate(x_common[0])
+        pred_curves[1].interpolate(x_common[1])
+        gt_curves[0].interpolate(x_common[0])
+        gt_curves[1].interpolate(x_common[1])
+        curves_in_subplot = {
+            "1": [
+                {"gt": gt_curves[0], "pred": pred_curves[0]},
+                {"gt": gt_curves[1], "pred": pred_curves[1]}
+            ]
+        }
+        self.assertSameDict(perf, cal_perf(curves_in_subplot))
 
     def test_gt_more_than_pred(self):
         # ground truth has more data then prediction 
@@ -375,16 +635,14 @@ class TestPlotEvaluatorGeneral(TestPlotEvaluator):
         curves_in_subplot = {
             "1": [
                 {
-                    "x": (pred_x[0], gt_x[0]),
-                    "y": (pred_value[0], gt_value[0]),
-                    "err": ([], []),
+                    "gt": Curve({"x": gt_x[0], "y": gt_value[0]}),
+                    "pred": Curve({"x": pred_x[0], "y": pred_value[0]}),
                     "gt_len": 18,
                     "pred_len": 5
                 },
                 {
-                    "x": (pred_x[1], gt_x[1]),
-                    "y": (pred_value[1], gt_value[1]),
-                    "err": ([], []),
+                    "gt": Curve({"x": gt_x[1], "y": gt_value[1]}),
+                    "pred": Curve({"x": pred_x[1], "y": pred_value[1]}),
                     "gt_len": 18,
                     "pred_len": 5
                 }
@@ -405,9 +663,8 @@ class TestPlotEvaluatorGeneral(TestPlotEvaluator):
         curves_in_subplot = {
             "1": [
                 {
-                    "x": (pred_x, gt_x),
-                    "y": (pred_value, gt_value),
-                    "err": ([], []),
+                    "gt": Curve({"x": gt_x, "y": gt_value}),
+                    "pred": Curve({"x": pred_x, "y": pred_value}),
                     "gt_len": 12,
                     "pred_len": 13
                 }
@@ -434,9 +691,143 @@ class TestPlotEvaluatorGeneral(TestPlotEvaluator):
             [3.78968253968254, 3.134920634920635, 2.9444444444444446, 2.880952380952381, 2.5396825396825395, 2.384920634920635, 2.325396825396825, 2.0, 1.8968253968253967, 1.6111111111111112]
         ]
         curves_in_subplot = {
-            "2012":[{ "x": (pred_x[0], gt_x[0]), "y": (pred_v[0], gt_v[0]), "err": ([], []), "gt_len": 10, "pred_len": 10 }],
-            "2013":[{ "x": (pred_x[1], gt_x[1]), "y": (pred_v[1], gt_v[1]), "err": ([], []), "gt_len": 10, "pred_len": 10 }],
-            "2014":[{ "x": (pred_x[2], gt_x[2]), "y": (pred_v[2], gt_v[2]), "err": ([], []), "gt_len": 10, "pred_len": 10 }]
+            "2012":[{ 
+                "gt": Curve({"x": gt_x[0], "y": gt_v[0]}),
+                "pred": Curve({"x": pred_x[0], "y": pred_v[0]}),
+                "gt_len": 10, "pred_len": 10 
+            }],
+            "2013":[{
+                "gt": Curve({"x": gt_x[1], "y": gt_v[1]}),
+                "pred": Curve({"x": pred_x[1], "y": pred_v[1]}),
+                "gt_len": 10, "pred_len": 10
+            }],
+            "2014":[{
+                "gt": Curve({"x": gt_x[2], "y": gt_v[2]}),
+                "pred": Curve({"x": pred_x[2], "y": pred_v[2]}),
+                "gt_len": 10, "pred_len": 10
+            }]
+        }
+        self.assertSameDict(perf, cal_perf(curves_in_subplot))
+
+    def test_missing_curve(self):
+        pred = pd.read_csv("Tests/evaluator/P-2-O1_pred_missing_curve.csv")
+        gt = pd.read_csv("Tests/evaluator/P-2-O1_gt.csv")
+        perf = evaluate_plot([pred], [gt])
+
+        pred_value = [[-0.15, -0.05, 0.1]]
+        pred_err = [[0.1, 0.12, 0.09]]
+        gt_value = [[-0.1957403651115618, -0.061866125760649, 0.0740365111561865], 
+                    [-0.3600405679513184, -0.1369168356997971, 0.0801217038539553]]
+        gt_err = [[0.2251521298174442, 0.1176470588235294, 0.2393509127789046], 
+                  [0.2718052738336714, 0.1440162271805274, 0.2900608519269776]]
+        curves_in_subplot = {
+            "1": [
+                {
+                    "gt": Curve({"y": gt_value[0], "err": gt_err[0]}),
+                    "pred": Curve({"y": pred_value[0], "err": pred_err[0]}),
+                    "gt_len": 3,
+                    "pred_len": 3
+                },
+                { "gt": Curve({}), "pred": Curve({}), "gt_len": 3, "pred_len": 0 }
+            ]
+        }
+        self.assertSameDict(perf, cal_perf(curves_in_subplot))
+
+    def test_extra_curve(self):
+        pred = pd.read_csv("Tests/evaluator/P-2-O1_pred_extra_curve.csv")
+        gt = pd.read_csv("Tests/evaluator/P-2-O1_gt.csv")
+        perf = evaluate_plot([pred], [gt])
+
+        pred_value = [[-0.15, -0.05, 0.1], [-0.1, 0.0, 0.05]]
+        pred_err = [[0.1, 0.12, 0.09], [0.08, 0.07, 0.06]]
+        gt_value = [[-0.1957403651115618, -0.061866125760649, 0.0740365111561865], 
+                    [-0.3600405679513184, -0.1369168356997971, 0.0801217038539553]]
+        gt_err = [[0.2251521298174442, 0.1176470588235294, 0.2393509127789046], 
+                  [0.2718052738336714, 0.1440162271805274, 0.2900608519269776]]
+        curves_in_subplot = {
+            "1": [
+                {
+                    "gt": Curve({"y": gt_value[0], "err": gt_err[0]}),
+                    "pred": Curve({"y": pred_value[0], "err": pred_err[0]}),
+                    "gt_len": 3,
+                    "pred_len": 3
+                },
+                {
+                    "gt": Curve({"y": gt_value[1], "err": gt_err[1]}),
+                    "pred": Curve({"y": pred_value[1], "err": pred_err[1]}),
+                    "gt_len": 3,
+                    "pred_len": 3
+                },
+                { "gt": Curve({}), "pred": Curve({}), "gt_len": 0, "pred_len": 3 }
+            ]
+        }
+        self.assertSameDict(perf, cal_perf(curves_in_subplot))
+
+    def test_missing_subplot(self):
+        pred = pd.read_csv("Tests/evaluator/P-49-O6_pred_missing_subplot.csv")
+        gt = pd.read_csv("Tests/evaluator/P-49-O6_gt.csv")
+        perf = evaluate_plot([pred], [gt])
+
+        pred_x = [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]]
+        pred_v = [
+            [3.9, 3.6, 3.4, 3.1, 2.9, 2.6, 2.4, 2.1, 1.9, 1.7], 
+            [3.9, 3.7, 3.4, 3.2, 2.8, 2.5, 2.3, 2.0, 1.8, 1.6], 
+            [3.9, 3.7, 3.5, 3.2, 2.9, 2.6, 2.3, 2.0, 1.8, 1.6]
+        ]
+        gt_x = [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]]
+        gt_v = [
+            [3.8055555555555554, 3.321428571428571, 3.182539682539683, 3.003968253968254, 2.7182539682539684, 2.515873015873016, 2.369047619047619, 2.174603174603175, 2.031746031746032, 1.6746031746031744], 
+            [3.801587301587301, 3.174603174603175, 3.003968253968254, 2.984126984126984, 2.6468253968253967, 2.4404761904761907, 2.4047619047619047, 2.087301587301587, 1.9603174603174605, 1.6825396825396823]
+        ]
+        curves_in_subplot = {
+            "2012":[{ 
+                "gt": Curve({"x": gt_x[0], "y": gt_v[0]}),
+                "pred": Curve({"x": pred_x[0], "y": pred_v[0]}),
+                "gt_len": 10, "pred_len": 10 
+            }],
+            "2013":[{
+                "gt": Curve({"x": gt_x[1], "y": gt_v[1]}),
+                "pred": Curve({"x": pred_x[1], "y": pred_v[1]}),
+                "gt_len": 10, "pred_len": 10
+            }],
+            "2014":[{ "gt": Curve({}), "pred": Curve({}), "gt_len": 10, "pred_len": 0 }]
+        }
+        self.assertSameDict(perf, cal_perf(curves_in_subplot))
+
+    def test_extra_subplot(self):
+        pred = pd.read_csv("Tests/evaluator/P-49-O6_pred_extra_subplot.csv")
+        gt = pd.read_csv("Tests/evaluator/P-49-O6_gt.csv")
+        perf = evaluate_plot([pred], [gt])
+
+        pred_x = [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]]
+        pred_v = [
+            [3.9, 3.6, 3.4, 3.1, 2.9, 2.6, 2.4, 2.1, 1.9, 1.7], 
+            [3.9, 3.7, 3.4, 3.2, 2.8, 2.5, 2.3, 2.0, 1.8, 1.6], 
+            [3.9, 3.7, 3.5, 3.2, 2.9, 2.6, 2.3, 2.0, 1.8, 1.6]
+        ]
+        gt_x = [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]]
+        gt_v = [
+            [3.8055555555555554, 3.321428571428571, 3.182539682539683, 3.003968253968254, 2.7182539682539684, 2.515873015873016, 2.369047619047619, 2.174603174603175, 2.031746031746032, 1.6746031746031744], 
+            [3.801587301587301, 3.174603174603175, 3.003968253968254, 2.984126984126984, 2.6468253968253967, 2.4404761904761907, 2.4047619047619047, 2.087301587301587, 1.9603174603174605, 1.6825396825396823], 
+            [3.78968253968254, 3.134920634920635, 2.9444444444444446, 2.880952380952381, 2.5396825396825395, 2.384920634920635, 2.325396825396825, 2.0, 1.8968253968253967, 1.6111111111111112]
+        ]
+        curves_in_subplot = {
+            "2012":[{ 
+                "gt": Curve({"x": gt_x[0], "y": gt_v[0]}),
+                "pred": Curve({"x": pred_x[0], "y": pred_v[0]}),
+                "gt_len": 10, "pred_len": 10 
+            }],
+            "2013":[{
+                "gt": Curve({"x": gt_x[1], "y": gt_v[1]}),
+                "pred": Curve({"x": pred_x[1], "y": pred_v[1]}),
+                "gt_len": 10, "pred_len": 10
+            }],
+            "2014":[{
+                "gt": Curve({"x": gt_x[2], "y": gt_v[2]}),
+                "pred": Curve({"x": pred_x[2], "y": pred_v[2]}),
+                "gt_len": 10, "pred_len": 10
+            }],
+            "2015":[{ "gt": Curve({}), "pred": Curve({}), "gt_len": 0, "pred_len": 10 }]
         }
         self.assertSameDict(perf, cal_perf(curves_in_subplot))
 
@@ -444,18 +835,6 @@ class TestPlotEvaluatorGeneral(TestPlotEvaluator):
         pass
 
     def DISABLE_test_x_mix_str_int(self):
-        pass
-
-    def DISABLE_test_missing_subplot(self):
-        pass
-
-    def DISABLE_test_missing_type2(self):
-        pass
-
-    def DISABLE_test_unexisted_subplot(self):
-        pass
-
-    def DISABLE_test_unexisted_type2(self):
         pass
 
 if __name__ == "__main__":

@@ -1,0 +1,8 @@
+"Empty Column 0","Bivariate model (1)","Bivariate model (1) (SE)","Full model (2)","Full model (2) (SE)","Women partisans (3)","Women partisans (3) (SE)","Men partisans (4)","Men partisans (4) (SE)"
+"[out-party j’s proportion of women MPs (t-1)]","1.89**","0.43","1.73**","0.52","2.10**","0.53","1.13*","0.50"
+"[elite right−left distance i, j (t)]","","","-0.60**","0.09","-0.62**","0.09","-0.66**","0.09"
+"[i, j are coalition partners (t)]","","","0.94**","0.25","0.94**","0.23","0.96**","0.25"
+"[i, j are opposition partners (t)]","","","0.37**","0.11","0.36**","0.09","0.35**","0.11"
+"Country and year fixed effects","1","","1","","1","","1",""
+"Observations","1842","","1842","","1836","","1833",""
+"Adjusted R^2","0.15","","0.31","","0.31","","0.30",""

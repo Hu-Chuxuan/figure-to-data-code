@@ -1,0 +1,12 @@
+Unnamed: 0,Bivariate model (1),Full model (2),Women partisans (3),Men partisans (4)
+[out-party j’s proportion of women MPs (t-1)],1.89**,1.73**,2.10**,1.13*
+[out-party j’s proportion of women MPs (t-1)] (1),0.43,0.52,0.53,0.50
+"[elite right–left distance i,j (t)]",,-0.60**,-0.62**,-0.66**
+"[elite right–left distance i,j (t)] (1)",,0.09,0.09,0.09
+"[i,j are coalition partners (t)]",,0.94**,0.94**,0.96**
+"[i,j are coalition partners (t)] (1)",,0.25,0.23,0.25
+"[i,j are opposition partners (t)]",,0.37**,0.36**,0.35**
+"[i,j are opposition partners (t)] (1)",,0.11,0.09,0.11
+Country and year fixed effects,1,1,1,1
+Observations,1842,1842,1836,1833
+Adjusted R^2,0.15,0.31,0.31,0.30
