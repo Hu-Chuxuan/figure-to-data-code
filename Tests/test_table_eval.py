@@ -4,7 +4,8 @@ import sys, os
 import numpy as np
 
 sys.path.append(os.path.abspath(os.path.dirname(os.path.abspath(os.path.dirname(__file__)))))
-from TableEvaluator import evaluate_table, is_match, TableIterator
+from TableEvaluator import evaluate_table, is_match
+from Exceptions import FormatError
 
 class TestTableEvaluator(unittest.TestCase):
     def assertMatch(self, value1, value2, same_inc, total_inc):
@@ -77,60 +78,31 @@ class TestTableEvaluator(unittest.TestCase):
                 # If both are invalid, should not count it at all
                 self.assertMatch(pred, gt, 0, 0)
 
-    def test_table_iterator_col(self):
-        col_df = pd.DataFrame({
-            "Empty Column 0": ["First row", "Second row", "Third row"],
-            "DV 1": [1, 2, 3],
-            "DV 1 (SE)": [0.1, 0.2, 0.3],
-            "DV 2": [4, 5, 6],
-            "DV 2 (SE)": [0.4, 0.5, 0.6],
-            "DV 2 (p-value)": [0.04, 0.05, 0.06],
-            "DV 3": [7, 8, 9]
-        })
-        col_iter = TableIterator(col_df)
-        col_group = [[0], [1, 2], [3, 4, 5], [6]]
-        self.assertEqual(col_iter.col_group, col_group)
-        row_group = [[0], [1], [2]]
-        self.assertEqual(col_iter.row_group, row_group)
-        col_order = [
-            "First row", 1, 0.1, 4, 0.4, 0.04, 7, 
-            "Second row", 2, 0.2, 5, 0.5, 0.05, 8, 
-            "Third row", 3, 0.3, 6, 0.6, 0.06, 9
-        ]
-        for i, col in enumerate(col_iter):
-            self.assertEqual(col, col_order[i])
-
-    def test_table_iterator_row(self):
-        row_df = pd.DataFrame({
-            "Empty Column 0": ["First row", "First row (SE)", "First row (p-value)", "Second row", "Second row (SE)", "Second row (p-value)", "Third row", "Third row (SE)", "Third row (p-value)"],
-            "DV 1": [1, 0.1, "", 2, 0.2, "", 3, 0.3, ""],
-            "DV 2": [4, 0.4, 0.04, 5, 0.5, 0.05, 6, 0.6, 0.06],
-            "DV 3": [7, "", "", 8, "", "", 9, "", ""]
-        })
-        row_iter = TableIterator(row_df)
-        row_group = [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
-        self.assertEqual(row_iter.row_group, row_group)
-        col_group = [[0], [1], [2], [3]]
-        self.assertEqual(row_iter.col_group, col_group)
-        row_order = [
-            "First row", 1, 0.1, 4, 0.4, 0.04, 7, 
-            "Second row", 2, 0.2, 5, 0.5, 0.05, 8, 
-            "Third row", 3, 0.3, 6, 0.6, 0.06, 9
-        ]
-        for i, row in enumerate(row_iter):
-            self.assertEqual(row, row_order[i])
+    def test_eval_table_simple(self):
+        pred_df = pd.read_csv("Tests/evaluator/T-2-O2_pred.csv")
+        gt_df = pd.read_csv("Tests/evaluator/T-2-O2_gt.csv")
+        perf = evaluate_table([pred_df], [gt_df])
+        self.assertEqual(perf["Accuracy"], 1)
+        self.assertEqual(perf["Total"], 10)
     
-    def DISABLE_test_eval_table_simple(self):
-        pass
-
-    def test_table_cmp_both(self):
+    def test_eval_table_multi_panel(self):
+        pred_df = [
+            pd.read_csv("Tests/evaluator/T-14-O1-0_pred.csv"),
+            pd.read_csv("Tests/evaluator/T-14-O1-1_pred.csv"),
+        ]
+        gt_df = [
+            pd.read_csv("Tests/evaluator/T-14-O1-1_gt.csv"),
+            pd.read_csv("Tests/evaluator/T-14-O1-2_gt.csv"),
+        ]
+        perf = evaluate_table(pred_df, gt_df)
+        self.assertEqual(perf["Accuracy"], 1-19/167)
+        self.assertEqual(perf["Total"], 167)
+    
+    def test_table_format_error(self):
         row_df = pd.read_csv("Tests/evaluator/T-10-O1_pred.csv")
         col_df = pd.read_csv("Tests/evaluator/T-10-O1_gt.csv")
-        perf = evaluate_table([row_df], [col_df])
-        self.assertEqual(perf, 1)
-    
-    def DISABLE_test_table_std_in_row(self):
-        self.assertEqual(1, 2)
+        with self.assertRaises(FormatError):
+            evaluate_table([row_df], [col_df])
     
     def DISABLE_test_table_range_value(self):
         self.assertEqual(1, 2)

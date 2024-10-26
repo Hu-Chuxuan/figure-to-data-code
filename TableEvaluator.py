@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 
 from Exceptions import WrongCSVNumberError, FormatError, YELLOW, BLUE, MAGENTA, RESET
-from PlotEvaluator import parse_range
 
 def is_repeat(value, repeat):
     if len(repeat) == 0 or len(value) % len(repeat) != 0:
@@ -40,6 +39,50 @@ def parse_digit_from_sig(value):
             return None, None
     return digit, repeat_cnt
 
+'''
+@description: if the string is in the format of "start - end" where start and end are two numbers, 
+              we can parse the start and end values
+@params: a string
+@return: start and end values, None if the string is not in the format of "start - end"
+'''
+def parse_range(value):
+    if len(value) <= 1:
+        return None, None
+    bracket_open = ["[", "(", "{", "<"]
+    bracket_close = ["]", ")", "}", ">"]
+    value = value.strip()
+    if value[0] in bracket_open and value[-1] == bracket_close[bracket_open.index(value[0])]:
+        value = value[1:-1]
+    range_dict = [",", ";", "to", "--"]
+    for range_str in range_dict:
+        if range_str in value and value.count(range_str) == 1:
+            start, end = value.split(range_str)
+            start = start.strip()
+            end = end.strip()
+            try:
+                start = float(start)
+                end = float(end)
+            except:
+                return None, None
+            return start, end
+    if "-" in value:
+        dash_indices = [i for i in range(len(value)) if value[i] == "-"]
+        if dash_indices[0] == 0:
+            if len(dash_indices) == 1:
+                return None, None
+            split_idx = dash_indices[1]
+        else:
+            split_idx = dash_indices[0]
+        start = value[:split_idx].strip()
+        end = value[split_idx+1:].strip()
+        try:
+            start = float(start)
+            end = float(end)
+            return start, end
+        except:
+            return None, None
+    return None, None
+
 def to_float(value):
     if type(value) == str:
         digit, repeat = parse_digit_from_sig(value)
@@ -67,65 +110,6 @@ def is_match(pred, gt):
         return 1, 1
     return 0, 1
 
-class TableIterator:
-    def is_split_stat(self, prev, cur):
-        return type(prev) == str and type(cur) == str and \
-               cur[:len(prev)] == prev and re.match(r"\(.*\)", cur[len(prev):].strip())
-    
-    def __init__(self, df):
-        self.df = df
-
-        self.col_group = []
-        self.row_group = []
-        i = 0
-        while i < len(df.columns):
-            self.col_group.append([i])
-            idx = i
-            i += 1
-            while i < len(df.columns) and self.is_split_stat(df.columns[idx], df.columns[i]):
-                self.col_group[-1].append(i)
-                i += 1
-        i = 0
-        while i < len(df):
-            self.row_group.append([i])
-            idx = i
-            i += 1
-            while i < len(df) and self.is_split_stat(df.iloc[idx][0], df.iloc[i][0]):
-                self.row_group[-1].append(i)
-                i += 1
-
-        self.row_group_ptr, self.col_group_ptr = 0, 0
-        self.cur_row_in, self.cur_col_in = -1, 0
-    
-    def __iter__(self):
-        return self
-    
-    def __next__(self):
-        if self.row_group_ptr >= len(self.row_group):
-            raise StopIteration
-        
-        while True:
-            self.cur_row_in += 1
-            if self.cur_row_in >= len(self.row_group[self.row_group_ptr]):
-                self.cur_row_in = 0
-                self.cur_col_in += 1
-            if self.cur_col_in >= len(self.col_group[self.col_group_ptr]):
-                self.cur_col_in = 0
-                self.col_group_ptr += 1
-            if self.col_group_ptr >= len(self.col_group):
-                self.col_group_ptr = 0
-                self.row_group_ptr += 1
-            if self.row_group_ptr >= len(self.row_group):
-                raise StopIteration
-            row_idx = self.row_group[self.row_group_ptr][self.cur_row_in]
-            col_idx = self.col_group[self.col_group_ptr][self.cur_col_in]
-            if (self.cur_row_in != 0 or self.cur_col_in != 0) and is_empty(self.df.iloc[row_idx][col_idx]):
-                continue
-            if self.cur_row_in != 0 and col_idx == 0:
-                continue
-
-            return self.df.iloc[row_idx][col_idx]
-
 '''
 @raise:
     WrongCSVNumberError: the number of predicted CSV files is different from the number of ground truth CSV files
@@ -142,17 +126,17 @@ def evaluate_table(pred_dfs, gt_dfs):
         pred_df = pred_dfs[df_ptr]
         gt_df = gt_dfs[df_ptr]
 
-        pred_iter = TableIterator(pred_df)
-        gt_iter = TableIterator(gt_df)
+        if len(pred_df.columns) != len(gt_df.columns):
+            raise FormatError(f"The predicted CSV file has {len(pred_df.columns)} columns while the ground truth CSV file has {len(gt_df.columns)} columns.")
+        for gt_row in range(len(gt_df)):
+            for gt_col in range(len(gt_df.columns)):
+                if gt_row >= len(pred_df):
+                    total += 1
+                    continue
+                pred_value = pred_df.iloc[gt_row, gt_col]
+                gt_value = gt_df.iloc[gt_row, gt_col]
+                same_inc, total_inc = is_match(pred_value, gt_value)
+                same += same_inc
+                total += total_inc
 
-        if len(pred_iter.col_group) != len(gt_iter.col_group):
-            raise FormatError(f"The predicted CSV file has {len(pred_iter.col_group)} columns while the ground truth CSV file has {len(gt_iter.col_group)} columns.")
-        elif len(pred_iter.row_group) != len(gt_iter.row_group):
-            raise FormatError(f"The predicted CSV file has {len(pred_iter.row_group)} rows while the ground truth CSV file has {len(gt_iter.row_group)} rows.")
-        for pred_val, gt_val in zip(pred_iter, gt_iter):
-            s_inc, t_inc = is_match(pred_val, gt_val)
-            same += s_inc
-            total += t_inc
-
-    print("same: ", same, "total: ", total)
-    return same / total
+    return {"Accuracy": same / total, "Total": total, "Same": same}
