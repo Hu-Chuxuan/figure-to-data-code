@@ -16,7 +16,7 @@ def parse_digit_from_sig(value):
     if not match:
         return None, None
     digit = match.group(0)
-    if len(digit) == 0:
+    if len(digit) == 0 or digit == "-":
         return None, None
     value = value[len(digit):]
     digit = float(digit)
