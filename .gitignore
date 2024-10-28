@@ -4,3 +4,6 @@ tmp/
 *.csv
 *.txt
 *.png
+.vscode/
+*.json
+*.jsonl
