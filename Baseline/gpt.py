@@ -1,47 +1,12 @@
 import cv2
 from openai import OpenAI
+import anthropic
 from io import BytesIO
 from PIL import Image
 import base64
 import argparse
 import pandas as pd
 from io import StringIO
-
-digitization = '''
-You are given a picture of a plot or a table. Your task is to digitize the data from the picture and convert it into a CSV file. This involves extracting the data points, labels, and other relevant information from the picture and organizing them into a structured dataset. The goal is to create a digital representation of the data that can be easily analyzed, manipulated, and visualized by a computer program.
-
-To do this, you will first identify whether the picture contains a plot or a table. 
-
-If the picture contains a table, 
-    1. In the column headers and row headers, we only want minimum amount of information to identify the columns and rows. Also, you should only have one column for the row headers and one row for the column headers. If you MUST contain the panel names or something to distinguish the row or column, concate the information with dash. For example, if the row header is "A" and the panel name is "1", you should use "A - 1" as the row header instead of using two columns.
-    2. If a cell contains multiple statistics, you need to split them into separate **columns**. The column of the coefficient should be the same as the original name, while the rest should append the indices "(1)", "(2)", etc. Since we are generating a CSV file, you should use separate COLUMNs to represent the statistics INSTEAD OF ROWs. Therefore, you shoud first count the maximum number of statistics in a column and then determine the number of columns you need to split for each column.
-    3. If the statistics are wrapped in parentheses, you should remove the parentheses and keep the statistics as they are. For the numbers separated by a comma, you should remove the comma and keep the numbers as they are.
-    4. If a cell contains a statistic significance marker, you should remain the marker as it is. DO NOT convert the statistic significance to p-values. The marker should be attached in the same cell as the statistic it refers to.
-    5. For all special characters, you should represent them as the LaTeX notation. You MUST NOT separate the statistic significance marker with the coefficients. For the control variable checkmark, you should use 1 to represent the selected controls and 0 to represent the unselected controls. The control variable checkmark might be in different formats, for example "Yes", "\checkmark", "X", etc. You should convert all of them to 0/1.
-    6. You MUST reserve the structure of the table in the image, which means that you CANNOT transpose the table or rearrange the orders. You can only split the table into multiple CSV files if there are multiple different headers. If there are multiple panels sharing the same header, DO NOT split them. 
-
-If the picture contains a plot, 
-    1. Your output should follow the following format:
-        1) You should use "Type-{}" as the column name for the independent variables. For example, in a plot with independent axis labels and multiple curves, you should use "Type-1" to represent the independent axis labels and "Type-2" for the curve labels. If the plot has only one curve or only one x-axis label, you should use "Type-1" to refer to the one independent variable.
-        2) You should use "Value" as the column name for the dependent variable and "Subplot Value" as the column names for the different subplots. Since the subplots are special, you MUST AVOID using the "Type-{}" reference to represent the subplots.
-        3) If the plot has error bars, you should include "Error Bar Length" as the column name for the error values. 
-    2. To estimate the data points in a quantitative way, you shoud use pixel coordinates to calculate the data points. 
-        1) First, you should identify the pixel positions of the ticks on the axis. With these pixel positions, you can have a reference point and the scale of the axis to convert the pixel positions to the actual values.
-        2) Then, for each data point, you should estimate the pixel position of the mean and the diameter of the error bars in pixel. 
-        3) Finally, you should calculate the mean and the diameter of the error bars to convert them in the same unit as the axis based on the pixel positions.
-        4) For example, in the plot, in y-axis, 0 is about 450 pixel, 0.05 is about 350 pixel. We can use the 0 as the reference point and the scale is 100 pixel for 0.05 unit. The pixel posititon of the mean of a data point is about (100, 420), the diameter of its error bar is about 40 pixels. Consider that the 0 in y-axis is in about 450 pixel and 0.05 is in about 350 pixel, the mean should be around 0 + (450 - 420) * (0.05 - 0) / 100 = 0.015 and the diameter should be 0.05 * 40 / 100 = 0.02".
-    3. For the subplots, you shoud use their titles to represent them. For example, if the title of a subplot is "A. Random Subplot", you should use "Random Subplot" as the "Subplot Value". If the title is "B", you should use "B" as the "Subplot Value". If there is no title, you should use "1", "2", "3", etc. to represent the subplots. 
-    4. There are some special rules for the histograms where each bar represents a range, 
-        1) By representing a range, we mean that the bars are not a one-to-one mapping from the ticks on the axis. For example, if the x-axis is from 0 to 1 with 10 ticks being 0, 0.1, 0.2, ..., 1, the bars in the histogram are not on the ticks, but they span between the ticks.
-        2) You MUST estimate the start point and end point of the range for each bar and using "{start point} - {end point}" to represent the range as one independent variable instead of using them as two independent variables. If each bar only represents one value, you should use the value as the individual variables.
-        3) If a range does not have a visible bar, you MUST NOT output the range with value 0 in the CSV file. 
-    5. For the dot plots or histograms, you should estimate all the data points in the plot. For the continuous plots, you should sample at least 20 points to estimate the curve. You MUST NOT omit any data points. ALL data points MUST be explicitly included in the CSV file.
-    6. Note that we rely on the values in columns "Type-{}" and "Subplot Value" to distinguish the different data points and subplots. You MUST use these columns to represent the data points uniquely in a CSV file. You should only output one CSV file for the plot. 
-
-You MUST use "```csv" and "```" to enclose the CSV-formatted data. Given the feature of CSV files, you MUST pay attention to the limitation of the CSV format. For example, you MUST NOT add any spaces after the commas in the CSV file. Also, if a cell contains a comma, you MUST wrap the cell with double quotes.
-
-Let's think step by step. 
-'''
 
 def encode_image(image):
     # use base64 to encode the cv2 image
@@ -51,7 +16,7 @@ def encode_image(image):
     image.save(buffered, format="PNG")
     return base64.b64encode(buffered.getvalue()).decode()
 
-def digitize(image, api_key=None, organization=None):
+def gpt(prompt, image, api_key=None, organization=None, model="gpt-4o"):
     client = OpenAI(api_key=api_key, organization=organization)
     encoded_img = encode_image(image)
     msg = [
@@ -60,7 +25,7 @@ def digitize(image, api_key=None, organization=None):
             "content": [
                 {
                     "type": "text",
-                    "text": digitization,
+                    "text": prompt,
                 },
                 {
                     "type": "image_url",
@@ -73,7 +38,7 @@ def digitize(image, api_key=None, organization=None):
     ]
 
     response = client.chat.completions.create(
-        model="gpt-4o",
+        model=model,
         messages=msg,
         temperature=0.7,
         max_tokens=4096,
@@ -84,21 +49,60 @@ def digitize(image, api_key=None, organization=None):
     print("# of output tokens: ", response.usage.completion_tokens)
 
     response = response.choices[0].message.content
+    return response
+
+def claude(prompt, image, api_key=None, organization=None, model="claude-3-5-sonnet-20241022"):
+    client = anthropic.Client(api_key=api_key)
+    encoded_img = encode_image(image)
+    msg = [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": prompt,
+                },
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "image/png",
+                        "data": encoded_img,
+                    },
+                },
+            ]
+        }
+    ]
+    response = client.messages.create(
+        model=model,
+        max_tokens=4096,
+        messages=msg,
+    )
+    print(response.content[0].text)
+    print("# of input tokens: ", response.usage.input_tokens)
+    print("# of output tokens: ", response.usage.output_tokens)
+    return response.content[0].text
+
+def parse_response(response):
     res = []
     pos = 0
-    try:
-        while pos < len(response):
-            start = response.find("```csv", pos)
-            if start == -1:
-                break
-            end = response.find("```", start+7)
-            df = pd.read_csv(StringIO(response[start+7:end]))
-            res.append(df)
-            pos = end + 3
-    except pd.errors.ParserError as e:
-        print(e)
-        return None, response
+    while pos < len(response):
+        start = response.find("```csv", pos)
+        if start == -1:
+            break
+        end = response.find("```", start+7)
+        df = pd.read_csv(StringIO(response[start+7:end]))
+        res.append(df)
+        pos = end + 3
 
+    return res
+
+def digitize(prompt, image, api_key=None, org=None, model="gpt-4o"):
+    if "claude" in model:
+        response = claude(prompt, image, api_key, org)
+    else:
+        response = gpt(prompt, image, api_key, org, model)
+    res = parse_response(response)
     return res, response
 
 if __name__ == "__main__":
