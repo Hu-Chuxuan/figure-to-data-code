@@ -6,6 +6,8 @@ from scipy.optimize import linear_sum_assignment
 from Exceptions import WrongCSVNumberError, FormatError, YELLOW, BLUE, MAGENTA, RESET
 from TableEvaluator import parse_range
 
+USE_MASE = False
+
 def process(value):
     if type(value) == np.ndarray:
         return value
@@ -35,20 +37,32 @@ class Curve:
             parsed_values.append(process(value[i]))
             if type(parsed_values[-1]) != type(parsed_values[0]):
                 any_str = True
-                break
-        if not any_str:
+        any_str = any_str or type(parsed_values[0]) == str
+        if name != "x":
             array = np.array(parsed_values, dtype=np.float64)
             super().__setattr__(name, array)
         else:
-            array = []
-            for value in parsed_values:
-                if isinstance(value, np.ndarray):
-                    assert value.shape == (2,)
-                    str_val = f"{value[0]}-{value[1]}"
+            super().__setattr__(name, parsed_values)
+    
+    def get_clean_attr(self, attr):
+        if self.__getattribute__(attr) is not None:
+            new_attr = []
+            for x in self.__getattribute__(attr):
+                if isinstance(x, np.ndarray):
+                    new_attr.extend(x.copy().flatten().astype(float))
+                elif isinstance(x, str):
+                    continue
+                elif isinstance(x, tuple) or isinstance(x, list):
+                    for val in x:
+                        new_attr.append(float(val))
                 else:
-                    str_val = str(value)
-                array.append(str_val)
-            super().__setattr__(name, array)
+                    new_attr.append(float(x))
+            if len(new_attr) == 0:
+                new_attr = None
+            else:
+                new_attr = np.array(new_attr, dtype=np.float64)
+            return new_attr
+        return None
 
     def __getattribute__(self, name: str):
         try:
@@ -71,10 +85,7 @@ class Curve:
             self.y = None
             self.err = None
         if self.x is not None:
-            if type(self.x) == np.ndarray and self.x.dtype != object:
-                self.x = self.x[indices]
-            else:
-                self.x = None
+            self.x = [self.x[i] for i in indices]
         if self.y is not None:
             if type(self.y) == np.ndarray and self.y.dtype != object:
                 self.y = self.y[indices]
@@ -139,15 +150,53 @@ def pair_score(pred, gt):
     gt: List, ground truth values or error bars
 '''
 def pair_data_points(pred_curve: Curve, gt_curve: Curve):
-    cost_matrix = np.zeros((len(pred_curve), len(gt_curve)))
+    row_candidates = []
+    col_candidates = []
     for i in range(len(pred_curve)):
         for j in range(len(gt_curve)):
-            cost_matrix[i, j] = pair_score(pred_curve.x[i], gt_curve.x[j])
+            if pair_score(pred_curve.x[i], gt_curve.x[j]) != np.inf:
+                row_candidates.append(i)
+                col_candidates.append(j)
+    row_candidates = sorted(list(set(row_candidates)))
+    col_candidates = sorted(list(set(col_candidates)))
+
+    if USE_MASE and type(gt_curve.x[0]) != str:
+        x_matrix = np.zeros((len(row_candidates), len(col_candidates)))
+        for i in range(len(row_candidates)):
+            for j in range(len(col_candidates)):
+                x_matrix[i, j] = pair_score(pred_curve.x[row_candidates[i]], gt_curve.x[col_candidates[j]])
+            gt_x = gt_curve.get_clean_attr("x")
+            x_matrix /= np.max(gt_x) - np.min(gt_x)
+
+        y_matrix = np.zeros((len(row_candidates), len(col_candidates)))
+        for i in range(len(row_candidates)):
+            for j in range(len(col_candidates)):
+                y_matrix[i, j] = pair_score(pred_curve.y[row_candidates[i]], gt_curve.y[col_candidates[j]])
+        y_matrix /= np.max(gt_curve.y) - np.min(gt_curve.y)
+
+        cost_matrix = x_matrix + y_matrix
+        if pred_curve.err is not None and gt_curve.err is not None:
+            err_matrix = np.zeros((len(row_candidates), len(col_candidates)))
+            for i in range(len(row_candidates)):
+                for j in range(len(col_candidates)):
+                    err_matrix[i, j] = pair_score(pred_curve.err[row_candidates[i]], gt_curve.err[col_candidates[j]])
+            err_matrix /= np.max(gt_curve.err) - np.min(gt_curve.err)
+            cost_matrix += err_matrix
+    else:
+        cost_matrix = np.zeros((len(row_candidates), len(col_candidates)))
+        for i in range(len(row_candidates)):
+            for j in range(len(col_candidates)):
+                cost_matrix[i, j] = pair_score(pred_curve.x[row_candidates[i]], gt_curve.x[col_candidates[j]])
     try:
         row_idx, col_idx = linear_sum_assignment(cost_matrix)
     except:
         row_idx = None
         col_idx = None
+    if row_idx is not None:
+        for i in range(len(row_idx)):
+            row_idx[i] = row_candidates[row_idx[i]]
+        for i in range(len(col_idx)):
+            col_idx[i] = col_candidates[col_idx[i]]
     pred_curve.select(row_idx)
     gt_curve.select(col_idx)
 
@@ -195,7 +244,7 @@ def separate_curve(df):
 def pair_curves(pred_curves, gt_curves):
     paired_curves = {}
     paired = {}
-    # pair_trace = ""
+    pair_trace = ""
     for subplot_gt, type2_gt in gt_curves.keys():
         best_score = np.inf
         best_subplot_pred, best_type2_pred = None, None
@@ -212,24 +261,24 @@ def pair_curves(pred_curves, gt_curves):
         if best_score < np.inf:
             paired[(best_subplot_pred, best_type2_pred)] = (subplot_gt, type2_gt)
             pred_curve = pred_curves[(best_subplot_pred, best_type2_pred)]
-            # pair_trace += f"Pairing ({subplot_gt}, {best_subplot_pred}) and ({type2_gt}, {best_type2_pred})\n"
+            pair_trace += f"Pairing ({subplot_gt}, {best_subplot_pred}) and ({type2_gt}, {best_type2_pred})\n"
         else:
             pred_curve = {}
-            # pair_trace += f"Curve ({subplot_gt}, {type2_gt}) cannot be paired with any curve in prediction\n"
+            pair_trace += f"Curve ({subplot_gt}, {type2_gt}) cannot be paired with any curve in prediction\n"
         if subplot_gt not in paired_curves:
             paired_curves[subplot_gt] = []
         gt_curve = gt_curves[(subplot_gt, type2_gt)]
         paired_curves[subplot_gt].append((Curve(pred_curve), Curve(gt_curve)))
     
-    # pair_trace += "Unpaired curves in prediction:\n"
+    pair_trace += "Unpaired curves in prediction:\n"
     for subplot_pred, type2_pred in pred_curves.keys():
         if (subplot_pred, type2_pred) not in paired:
             pred_curve = pred_curves[(subplot_pred, type2_pred)]
             if subplot_pred not in paired_curves:
                 paired_curves[subplot_pred] = []
             paired_curves[subplot_pred].append((Curve(pred_curve), Curve({})))
-            # pair_trace += f"({subplot_pred}, {type2_pred}), "
-    # pair_trace += "\n"
+            pair_trace += f"({subplot_pred}, {type2_pred}), "
+    pair_trace += "\n"
 
     return paired_curves
 
@@ -266,16 +315,13 @@ def cal_perf(curves_in_subplot):
         for curve in curves:
             perf = {}
             if len(curve["gt"]) != 0 and len(curve["pred"]) != 0:
-                if curve["gt"].x is not None:
-                    perf["X performance"] = cal_metrics(curve["pred"].x, curve["gt"].x)
-                perf["Value performance"] = cal_metrics(curve["pred"].y, curve["gt"].y)
+                pred_x = curve["pred"].get_clean_attr("x")
+                gt_x = curve["gt"].get_clean_attr("x")
+                if gt_x is not None:
+                    perf["X performance"] = cal_metrics(pred_x, gt_x, curve["x scale"], curve["x mean"])
+                perf["Value performance"] = cal_metrics(curve["pred"].y, curve["gt"].y, curve["y scale"], curve["y mean"])
                 if curve["gt"].err is not None:
-                    perf["Error performance"] = cal_metrics(curve["pred"].err, curve["gt"].err)
-                if curve["gt"].x is not None or curve["gt"].err is not None:
-                    perf["Overall performance"] = cal_metrics(
-                        curve["pred"].getter(["x", "y", "err"]),
-                        curve["gt"].getter(["x", "y", "err"])
-                    )
+                    perf["Error performance"] = cal_metrics(curve["pred"].err, curve["gt"].err, curve["err scale"], curve["err mean"])
             if "gt_len" in curve:
                 if curve["gt_len"] == 0:
                     perf["DP accuracy"] = 0
@@ -292,24 +338,26 @@ def cal_perf(curves_in_subplot):
         subplot_level_perf.append(merge_perf(curve_perf))
     return merge_perf(subplot_level_perf)
 
-def cal_metrics(pred_values, gt_values):
+def cal_metrics(pred_values, gt_values, scale, mean):
+    perf = {}
     # Mean Absolute Error
-    mae = np.mean(np.abs(pred_values - gt_values))
+    perf["MAE"] = np.mean(np.abs(pred_values - gt_values))
     # Mean Absolute Percentage Error
-    if 0 in gt_values:
-        mape = np.nan
-    else:
-        mape = np.mean(np.abs(pred_values - gt_values) / np.abs(gt_values))
+    if 0 not in gt_values:
+        perf["MAPE"] = np.mean(np.abs(pred_values - gt_values) / np.abs(gt_values))
     # Mean Absolute Percentage Error (epsilon = 1e-5)
-    mape_eps = np.mean(np.abs(pred_values - gt_values) / (np.abs(gt_values) + 1e-5))
+    perf["MAPE_eps"] = np.mean(np.abs(pred_values - gt_values) / (np.abs(gt_values) + 1e-5))
     # Symmetric Mean Absolute Percentage Error
-    smape = np.mean(np.abs(pred_values - gt_values) / (np.abs(pred_values) + np.abs(gt_values) + 1e-5)) * 2
+    perf["SMAPE"] = np.mean(np.abs(pred_values - gt_values) / (np.abs(pred_values) + np.abs(gt_values) + 1e-5)) * 2
     # Mean Absolute Scaled Error
-    mase = np.mean(np.abs(pred_values - gt_values)) / (np.max(gt_values) - np.min(gt_values))
+    if scale != 0:
+        perf["MASE"] = np.mean(np.abs(pred_values - gt_values)) / scale
     # R-squared
-    r_2 = 1 - np.sum((pred_values - gt_values) ** 2) / np.sum((gt_values - np.mean(gt_values)) ** 2)
+    r2_denom = np.sum((gt_values - mean) ** 2)
+    if r2_denom != 0:
+        perf["R-squared"] = 1 - np.sum((pred_values - gt_values) ** 2) / r2_denom
 
-    return {"MAE": mae, "MAPE": mape, "MAPE_eps": mape_eps, "SMAPE": smape, "MASE": mase, "R-squared": r_2}
+    return perf
 
 '''
 @raise: 
@@ -352,6 +400,7 @@ def evaluate_plot(pred_df, gt_df):
         for curve_pair in curve_pairs:
             pred_curve, gt_curve = curve_pair[pred_idx], curve_pair[gt_idx]
             if len(pred_curve) == 0 or len(gt_curve) == 0:
+                curves.append({"pred": pred_curve, "gt": gt_curve, "gt_len": len(gt_curve), "pred_len": len(pred_curve)})
                 continue
             if len(gt_curve) >= 50:
                 # This is a continuous plot
@@ -360,19 +409,31 @@ def evaluate_plot(pred_df, gt_df):
                     max(max(pred_curve.x), max(gt_curve.x)), num=50)
                 pred_curve.interpolate(x_common)
                 gt_curve.interpolate(x_common)
-                curves.append({"pred": pred_curve, "gt": gt_curve})
+                curves.append({"pred": pred_curve, "gt": gt_curve, "y scale": np.max(gt_curve.y) - np.min(gt_curve.y), "y mean": np.mean(gt_curve.y)})
+                if gt_curve.err is not None:
+                    curves[-1]["err scale"] = np.max(gt_curve.err) - np.min(gt_curve.err)
+                    curves[-1]["err mean"] = np.mean(gt_curve.err)
             else:
                 # This is a discrete plot
-                gt_len = len(gt_curve)
-                pred_len = len(pred_curve)
-                if gt_len <= pred_len:
+                curve = {"pred_len": len(pred_curve), "gt_len": len(gt_curve)}
+                gt_x = gt_curve.get_clean_attr("x")
+                if gt_curve.x is not None and not isinstance(gt_curve.x[0], str):
+                    curve["x scale"] = np.max(gt_x) - np.min(gt_x)
+                    curve["x mean"] = np.mean(gt_x)
+                if gt_curve.y is not None:
+                    curve["y scale"] = np.max(gt_curve.y) - np.min(gt_curve.y)
+                    curve["y mean"] = np.mean(gt_curve.y)
+                if gt_curve.err is not None:
+                    curve["err scale"] = np.max(gt_curve.err) - np.min(gt_curve.err)
+                    curve["err mean"] = np.mean(gt_curve.err)
+                
+                if curve["pred_len"] < curve["gt_len"]:
                     paired_pred_curve, paired_gt_curve = pair_data_points(pred_curve, gt_curve)
                 else:
                     paired_gt_curve, paired_pred_curve = pair_data_points(gt_curve, pred_curve)
-                curves.append({
-                    "pred": paired_pred_curve, "gt": paired_gt_curve,
-                    "gt_len": gt_len, "pred_len": pred_len
-                })
+                curve["pred"] = paired_pred_curve
+                curve["gt"] = paired_gt_curve
+                curves.append(curve)
         curves_in_subplot[subplot_gt] = curves
     perf = cal_perf(curves_in_subplot)
     perf["Curve accuracy"] = paired_curve_num / len(gt_curves)
