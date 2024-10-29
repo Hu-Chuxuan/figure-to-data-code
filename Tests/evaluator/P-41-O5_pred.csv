@@ -1,0 +1,85 @@
+Type-1,Type-2,Subplot Value,Value,Error Bar Length
+US,Alesina et al. (2018),A - 1,0.3456140350877193,0.0736842105263158
+UK,Alesina et al. (2018),A - 1,0.2771929824561403,0.0736842105263158
+Sweden,Alesina et al. (2018),A - 1,0.1885964912280702,0.093859649122807
+Italy,Alesina et al. (2018),A - 1,0.1473684210526315,0.0947368421052631
+Germany,Alesina et al. (2018),A - 1,0.2368421052631578,0.0728070175438596
+France,Alesina et al. (2018),A - 1,0.1614035087719298,0.0728070175438596
+US,Q on Imm.,A - 1,0.4000000000000001,0.0
+UK,Q on Imm.,A - 1,0.3192982456140351,0.0
+Sweden,Q on Imm.,A - 1,0.2596491228070175,0.0
+Italy,Q on Imm.,A - 1,0.3947368421052631,0.0
+Germany,Q on Imm.,A - 1,0.3614035087719298,0.0
+France,Q on Imm.,A - 1,0.3640350877192983,0.0
+Not High Imm. Sect.,Alesina et al. (2018),A - 2,0.3921971252566735,0.0
+H. Sect. & No College,Alesina et al. (2018),A - 2,0.461038961038961,0.0
+H. Sect. & College,Alesina et al. (2018),A - 2,0.420671834625323,0.0
+No College,Alesina et al. (2018),A - 2,0.3921971252566735,0.0
+College,Alesina et al. (2018),A - 2,0.4180555555555556,0.0
+Low Income,Alesina et al. (2018),A - 2,0.36875,0.0
+High Income,Alesina et al. (2018),A - 2,0.4404444444444444,0.0
+No Imm. Parent,Alesina et al. (2018),A - 2,0.4006849315068493,0.0
+Imm. Parent,Alesina et al. (2018),A - 2,0.3928571428571429,0.0
+Age 46-69,Alesina et al. (2018),A - 2,0.4154440154440155,0.0
+Age 18-45,Alesina et al. (2018),A - 2,0.3851845253863135,0.0
+Male,Alesina et al. (2018),A - 2,0.4071942446043165,0.0
+Female,Alesina et al. (2018),A - 2,0.3944444444444444,0.0
+Right-Wing,Alesina et al. (2018),A - 2,0.4888888888888889,0.0
+Left-Wing,Alesina et al. (2018),A - 2,0.3625,0.0
+Not High Imm. Sect.,Q on Imm.,A - 2,0.344047619047619,0.0
+H. Sect. & No College,Q on Imm.,A - 2,0.4888888888888889,0.0
+H. Sect. & College,Q on Imm.,A - 2,0.3888888888888889,0.0
+No College,Q on Imm.,A - 2,0.344047619047619,0.0
+College,Q on Imm.,A - 2,0.3888888888888889,0.0
+Low Income,Q on Imm.,A - 2,0.344047619047619,0.0
+High Income,Q on Imm.,A - 2,0.4333333333333333,0.0
+No Imm. Parent,Q on Imm.,A - 2,0.3496031746031746,0.0
+Imm. Parent,Q on Imm.,A - 2,0.4666666666666667,0.0
+Age 46-69,Q on Imm.,A - 2,0.3777777777777778,0.0
+Age 18-45,Q on Imm.,A - 2,0.3492063492063492,0.0
+Male,Q on Imm.,A - 2,0.3833333333333333,0.0
+Female,Q on Imm.,A - 2,0.3496031746031746,0.0
+Right-Wing,Q on Imm.,A - 2,0.4777777777777778,0.0
+Left-Wing,Q on Imm.,A - 2,0.3222222222222222,0.0
+US,Alesina et al. (2018),B - 1,0.5464912280701755,0.1973684210526315
+UK,Alesina et al. (2018),B - 1,0.5254385964912281,0.1885964912280702
+Sweden,Alesina et al. (2018),B - 1,0.4631578947368421,0.2
+Italy,Alesina et al. (2018),B - 1,0.3315789473684211,0.1973684210526315
+Germany,Alesina et al. (2018),B - 1,0.5017543859649122,0.1885964912280702
+France,Alesina et al. (2018),B - 1,0.2842105263157894,0.1885964912280702
+US,Q on Imm.,B - 1,0.7000000000000001,0.0
+UK,Q on Imm.,B - 1,0.6842105263157895,0.0
+Sweden,Q on Imm.,B - 1,0.6517543859649123,0.0
+Italy,Q on Imm.,B - 1,0.5789473684210527,0.0
+Germany,Q on Imm.,B - 1,0.6842105263157895,0.0
+France,Q on Imm.,B - 1,0.629824561403509,0.0
+Not High Imm. Sect.,Alesina et al. (2018),B - 2,0.6645569620253166,0.0
+H. Sect. & No College,Alesina et al. (2018),B - 2,0.6832298136645965,0.0
+H. Sect. & College,Alesina et al. (2018),B - 2,0.6832298136645965,0.0
+No College,Alesina et al. (2018),B - 2,0.6645569620253166,0.0
+College,Alesina et al. (2018),B - 2,0.6832298136645965,0.0
+Low Income,Alesina et al. (2018),B - 2,0.6521739130434783,0.0
+High Income,Alesina et al. (2018),B - 2,0.6888888888888889,0.0
+No Imm. Parent,Alesina et al. (2018),B - 2,0.6679245283018868,0.0
+Imm. Parent,Alesina et al. (2018),B - 2,0.6403508771929824,0.0
+Age 46-69,Alesina et al. (2018),B - 2,0.6722689075630253,0.0
+Age 18-45,Alesina et al. (2018),B - 2,0.6645569620253166,0.0
+Male,Alesina et al. (2018),B - 2,0.6764705882352942,0.0
+Female,Alesina et al. (2018),B - 2,0.6617647058823529,0.0
+Right-Wing,Alesina et al. (2018),B - 2,0.6875,0.0
+Left-Wing,Alesina et al. (2018),B - 2,0.65625,0.0
+Not High Imm. Sect.,Q on Imm.,B - 2,0.6848739495798319,0.0
+H. Sect. & No College,Q on Imm.,B - 2,0.7336134453781514,0.0
+H. Sect. & College,Q on Imm.,B - 2,0.726890756302521,0.0
+No College,Q on Imm.,B - 2,0.6848739495798319,0.0
+College,Q on Imm.,B - 2,0.726890756302521,0.0
+Low Income,Q on Imm.,B - 2,0.6836134453781513,0.0
+High Income,Q on Imm.,B - 2,0.7197478991596639,0.0
+No Imm. Parent,Q on Imm.,B - 2,0.6882352941176471,0.0
+Imm. Parent,Q on Imm.,B - 2,0.7226890756302521,0.0
+Age 46-69,Q on Imm.,B - 2,0.6907563025210085,0.0
+Age 18-45,Q on Imm.,B - 2,0.6836134453781513,0.0
+Male,Q on Imm.,B - 2,0.7134453781512605,0.0
+Female,Q on Imm.,B - 2,0.6781512605042017,0.0
+Right-Wing,Q on Imm.,B - 2,0.7256302521008403,0.0
+Left-Wing,Q on Imm.,B - 2,0.6756302521008404,0.0
