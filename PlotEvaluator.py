@@ -50,7 +50,7 @@ class Curve:
             for x in self.__getattribute__(attr):
                 if isinstance(x, np.ndarray):
                     new_attr.extend(x.copy().flatten().astype(float))
-                elif isinstance(x, str):
+                elif isinstance(x, str) or x is None:
                     continue
                 elif isinstance(x, tuple) or isinstance(x, list):
                     for val in x:
@@ -371,7 +371,7 @@ def evaluate_plot(pred_df, gt_df):
     else:
         raise WrongCSVNumberError(len(pred_df), len(gt_df))
     for col in pred_df.columns:
-        if col not in ["Value", "Subplot Value", "Error Bar Length"] and not re.match(r"Type-\d+", col):
+        if col not in ["Value", "Subplot Value", "Error Bar Length"] and not re.match(r"Type-\d+", col) and not re.match(r"Error Bar Length \d+", col):
             raise FormatError(f"The column {col} in the predicted CSV file is not a valid column.")
     
     pred_curves = separate_curve(pred_df)
@@ -402,7 +402,8 @@ def evaluate_plot(pred_df, gt_df):
             if len(pred_curve) == 0 or len(gt_curve) == 0:
                 curves.append({"pred": pred_curve, "gt": gt_curve, "gt_len": len(gt_curve), "pred_len": len(pred_curve)})
                 continue
-            if len(gt_curve) >= 50:
+            gt_x = gt_curve.get_clean_attr("x")
+            if len(gt_curve.x) >= 50 and gt_x is not None and len(gt_x) >= 50:
                 # This is a continuous plot
                 x_common = np.linspace(
                     min(min(pred_curve.x), min(gt_curve.x)), 
@@ -417,7 +418,7 @@ def evaluate_plot(pred_df, gt_df):
                 # This is a discrete plot
                 curve = {"pred_len": len(pred_curve), "gt_len": len(gt_curve)}
                 gt_x = gt_curve.get_clean_attr("x")
-                if gt_curve.x is not None and not isinstance(gt_curve.x[0], str):
+                if gt_x is not None:
                     curve["x scale"] = np.max(gt_x) - np.min(gt_x)
                     curve["x mean"] = np.mean(gt_x)
                 if gt_curve.y is not None:

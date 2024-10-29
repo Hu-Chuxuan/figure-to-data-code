@@ -130,10 +130,10 @@ def main(args):
             
             try:
                 if file_name[0] == "P":
-                    perf, pair_trace = evaluate_plot(res, gts)
-                    print(GREEN + pair_trace + RESET)
+                    perf = evaluate_plot(res, gts)
+                    # print(GREEN + pair_trace + RESET)
                 else:
-                    perf, pair_trace = evaluate_table(res, gts)
+                    perf = evaluate_table(res, gts)
                 valid_csv[idx] += 1
                 break
             except (WrongCSVNumberError, FormatError) as e:
