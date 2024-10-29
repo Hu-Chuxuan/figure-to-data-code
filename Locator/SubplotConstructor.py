@@ -2,15 +2,14 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 
-MIN_LINE = 50
+MIN_LINE = 20
 MIN_GAP = 5
-MIN_TICK_LEN = 5
+MIN_TICK_LEN = 2
 MAX_TICK_LEN = 50
-MAX_LINE_WIDTH = 10
 MAX_ALLOWED_GAP = 5
 
 class Axis:
-    def __init__(self, line_r, line_c_lo, line_c_hi, direction, color):
+    def __init__(self, line_r, line_c_lo, line_c_hi, direction, color=None):
         self.direction = direction
         self.line_r_lo = line_r
         self.line_r_hi = line_r+1
@@ -32,31 +31,32 @@ class Axis:
 
 class SubplotConstructor:
     def __init__(self):
-        self.bg_color = (255, 255, 255)
+        self.bg_color = np.array([255, 255, 255])
     
-    def filter_axes(self, image, potential_axes):
+    def filter_axes(self, image, potential_axes, strict=False):
         axes = []
         for axis in potential_axes:
-            if axis.line_r_hi - axis.line_r_lo > MAX_LINE_WIDTH:
-                continue
             # Find the ticks with the same color on at least one side
             sting_pos = {}
+            has_lo_tick = False
+            has_hi_tick = False
             for i in range(axis.line_c_lo, axis.line_c_hi):
                 for j in range(axis.line_r_hi, image.shape[0]):
                     if np.array_equal(image[j][i], self.bg_color) or \
                        (j - axis.line_r_hi+1 > MIN_TICK_LEN and not np.array_equal(image[j][i], axis.color)) or \
-                       not np.array_equal(image[j][i], axis.color):
-                        if axis.line_r_lo == 902 and 775 <= i <= 779:
-                            print(i, j-axis.line_r_hi+1)
+                       (strict and not np.array_equal(image[j][i], axis.color)):
                         if MIN_TICK_LEN < j - axis.line_r_hi + 1 < MAX_TICK_LEN:
                             sting_pos[i] = 1
+                            has_hi_tick = True
                         break
                 for j in range(axis.line_r_lo-1, 0, -1):
-                    if np.array_equal(image[j][i], self.bg_color) or (axis.line_r_lo - j - 1 > MIN_TICK_LEN and not np.array_equal(image[j][i], axis.color)) or not np.array_equal(image[j][i], axis.color):
+                    if np.array_equal(image[j][i], self.bg_color) or \
+                       (axis.line_r_lo - j - 1 > MIN_TICK_LEN and not np.array_equal(image[j][i], axis.color)) or \
+                       (strict and not np.array_equal(image[j][i], axis.color)):
                         if MIN_TICK_LEN < axis.line_r_lo - j - 1 < MAX_TICK_LEN:
                             sting_pos[i] = 1
+                            has_lo_tick = True
                         break
-            
             # Group continuous ticks and represent them with the middle point
             grouped_stings = []
             for sting in sorted(sting_pos.keys()):
@@ -72,16 +72,20 @@ class SubplotConstructor:
             # Should have at least one tick
             if len(ticks) > 0:
                 axis.ticks = ticks
+                if has_lo_tick and not has_hi_tick:
+                    axis.line_r_hi = axis.line_r_lo + 1
+                elif has_hi_tick and not has_lo_tick:
+                    axis.line_r_lo = axis.line_r_hi - 1
                 axes.append(axis)
         return axes
 
-    def merge_straight_lines(self, image, potential_axes):
+    def merge_straight_lines(self, image, potential_axes, strict=False):
         merged_lines = []
         for i in range(len(potential_axes)):
             merged = False
             for axis in merged_lines:
                 # Can this line be merged with an existing axis
-                if not np.array_equal(axis.color, potential_axes[i].color):
+                if strict and not np.array_equal(axis.color, potential_axes[i].color):
                     continue
                 to_merge = False
                 if axis.line_c_lo <= potential_axes[i].line_c_hi and potential_axes[i].line_c_lo <= axis.line_c_hi:
@@ -90,7 +94,8 @@ class SubplotConstructor:
                     for k in range(max(axis.line_c_lo, potential_axes[i].line_c_lo), min(axis.line_c_hi, potential_axes[i].line_c_hi)):
                         allowed_gap = MAX_ALLOWED_GAP
                         for l in range(min(axis.line_r_hi, potential_axes[i].line_r_hi), max(axis.line_r_lo, potential_axes[i].line_r_lo)):
-                            if not np.array_equal(image[l][k], axis.color):
+                            if (strict and not np.array_equal(image[l][k], axis.color)) or \
+                               (not strict and np.array_equal(image[l][k], self.bg_color)):
                                 if allowed_gap == 0:
                                     to_merge = False
                                     break
@@ -107,7 +112,8 @@ class SubplotConstructor:
                     for k in range(max(axis.line_r_lo, potential_axes[i].line_r_lo), min(axis.line_r_hi, potential_axes[i].line_r_hi)):
                         allowed_gap = MAX_ALLOWED_GAP
                         for l in range(min(axis.line_c_hi, potential_axes[i].line_c_hi), max(axis.line_c_lo, potential_axes[i].line_c_lo)):
-                            if not np.array_equal(image[k][l], axis.color):
+                            if (strict and not np.array_equal(image[k][l], axis.color)) or \
+                               (not strict and np.array_equal(image[k][l], self.bg_color)):
                                 if allowed_gap == 0:
                                     to_merge = False
                                     break
@@ -124,12 +130,12 @@ class SubplotConstructor:
 
         return merged_lines
 
-    def estimate_ticks(self, image, direction):
+    def estimate_my(self, image, direction, strict=False):
         if direction == "y":
             image = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
         # identify straight lines
         potential_axes = []
-        for i in tqdm(range(image.shape[0])):
+        for i in range(image.shape[0]):
             cur_color = image[i][0]
             cur_line_lo = 0
             j = 1
@@ -150,8 +156,8 @@ class SubplotConstructor:
                         cur_color = image[i][j]
                     cur_line_lo = j
                 j += 1
-        potential_axes = self.merge_straight_lines(image, potential_axes)
-        axes = self.filter_axes(image, potential_axes)
+        potential_axes = self.merge_straight_lines(image, potential_axes, strict)
+        axes = self.filter_axes(image, potential_axes, strict)
         if len(axes) == 0:
             # If no axes with ticks are detected, return the straight lines
             axes = potential_axes
@@ -167,12 +173,68 @@ class SubplotConstructor:
     
     def draw_axes(self, image, axes):
         for i, axis in enumerate(axes):
-            text = axis.direction+"["+str(i)+"]"
+            text = axis.direction + "[" + str(i) + "]"
             height, width = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)[0]
             if axis.direction == "x":
-                cv2.line(image, (axis.line_c_lo, axis.line_r_lo), (axis.line_c_hi, axis.line_r_lo), (0, 0, 255), 2)
-                cv2.putText(image, axis.direction+"["+str(i)+"]", (axis.line_c_hi+height, axis.line_r_lo+width), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
+                color = (0, 0, 255)
+                cv2.line(image, (axis.line_c_lo, axis.line_r_lo), (axis.line_c_hi, axis.line_r_lo), color, 1)
+                cv2.putText(image, text, ((axis.line_c_hi + axis.line_c_lo)//2, axis.line_r_lo + width), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
             else:
-                cv2.line(image, (axis.line_r_lo, axis.line_c_lo), (axis.line_r_lo, axis.line_c_hi), (255, 0, 0), 2)
-                cv2.putText(image, axis.direction+"["+str(i)+"]", (axis.line_r_lo+height, axis.line_c_lo+width), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1)
+                color = (255, 0, 0)
+                cv2.line(image, (axis.line_r_lo, axis.line_c_lo), (axis.line_r_lo, axis.line_c_hi), color, 1)
+                cv2.putText(image, text, (axis.line_r_hi, (axis.line_c_lo + axis.line_c_hi)//2), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+            if axis.ticks is not None:
+                for tick in axis.ticks:
+                    if axis.direction == "x":
+                        cv2.circle(image, (int(tick), axis.line_r_lo), 2, color, 2)
+                    else:
+                        cv2.circle(image, (axis.line_r_lo, int(tick)), 2, color, 2)
         return image
+
+    def estimate_ticks(self, image, direction, strict=False):
+        if direction == "y":
+            image = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
+        grey = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        edges = cv2.Canny(grey, 50, 150, apertureSize=3)
+        lines = cv2.HoughLines(edges, 1, np.pi/180, 200)
+
+        potential_axes = []
+        for line in lines:
+            # Only want horizontal lines
+            rho, theta = line[0]
+            # if theta < np.pi/4 or theta > 3*np.pi/4:
+            if np.abs(theta - np.pi/2) > np.pi/10:
+                continue
+            # Search for the line in the image
+            a = np.cos(theta)
+            b = np.sin(theta)
+            y1 = rho / b
+            y2 = (rho - image.shape[1] * a) / b
+            for rho in range(int(np.floor(min(y1, y2))), min(image.shape[0], int(np.ceil(max(y1, y2)+1)))):
+                cur_line_lo = 0
+                cur_color = image[rho][0]
+                for i in range(image.shape[1]):
+                    if (strict and not np.array_equal(image[rho][i], cur_color)) or \
+                       (not strict and np.array_equal(image[rho][i], self.bg_color)) or \
+                        i == image.shape[1]-1:
+                        if i - cur_line_lo > MIN_LINE:
+                            potential_axes.append(Axis(rho, cur_line_lo, i, direction, image[rho][cur_line_lo]))
+                        cur_line_lo = i
+                        cur_color = image[rho][i]
+
+        print(len(potential_axes))
+        potential_axes = self.merge_straight_lines(image, potential_axes, strict)
+        axes = self.filter_axes(image, potential_axes, strict)
+        print(len(axes))
+        if len(axes) == 0:
+            # If no axes with ticks are detected, return the straight lines
+            axes = potential_axes
+
+        if direction == "y":
+            for axis in axes:
+                axis.line_c_lo, axis.line_c_hi = image.shape[1]-axis.line_c_hi, image.shape[1]-axis.line_c_lo
+                if axis.ticks is not None:
+                    for i in range(len(axis.ticks)):
+                        axis.ticks[i] = image.shape[1] - axis.ticks[i]
+            image = cv2.rotate(image, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        return axes
