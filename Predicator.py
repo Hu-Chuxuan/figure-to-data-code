@@ -20,9 +20,13 @@ class Dataset:
     def __init__(self, root, types, paper_list=None, read_txt=False):
         self.read_txt = read_txt
         self.samples = []
+        self.metadata = pd.read_csv(os.path.join(root, "metadata.csv"))
+        self.names = self.metadata["File_name"].tolist()
         if paper_list is None:
             paper_list = os.listdir(root)
         for paper in paper_list:
+            if not os.path.isdir(os.path.join(root, paper)):
+                continue
             samples = os.listdir(os.path.join(root, paper))
             for sample in samples:
                 if sample[0] in types and (sample.endswith(".png") or sample.endswith(".jpeg")):
@@ -36,6 +40,11 @@ class Dataset:
     def __getitem__(self, idx):
         path, paper, name = self.samples[idx]
         sample_idx = name[name.find("-O")+2:]
+        if "P" == name[0]:
+            meta = self.metadata.loc[self.names.index(name)].to_dict()
+            meta["Paper_idx"] = paper
+        else:
+            meta = {"Type": "Table", "Paper_idx": paper}
         img = cv2.imread(path)
         gts = []
         path = path[:path.rfind("/")]
@@ -52,13 +61,12 @@ class Dataset:
                         gts.append(f.read())
                 else:
                     gts.append(pd.read_csv(os.path.join(path, file)))
-        return img, paper, name, gts
-
+        return {"image": img, "gt": gts, "metadata": meta}
 
 def main(args):
-    train_paper = ["2", "10", "14", "16", "20", "47", "49", "74", "86", "92", "100"]
-    valid_paper = ["4", "6", "18", "24", "36", "48", "56", "62", "88", "94", "98"]
-    dataset = Dataset(args.root, ["T"], valid_paper)
+    train_paper = ["2", "8", "10", "12", "14", "16", "20", "26", "32", "34", "38", "40", "41", "42", "43", "47", "49", "52", "55", "58", "61", "66", "68", "74", "86", "90", "92", "100"]
+    valid_paper = ["4", "6", "18", "22", "24", "28", "30", "36", "46", "48", "56", "62", "72", "84", "88", "94", "96", "100"]
+    dataset = Dataset(args.root, ["P"], valid_paper)
 
     total_csv = [0, 0]
     valid_csv = [0, 0]
@@ -68,11 +76,14 @@ def main(args):
     perf_per_sample = {}
 
     for i in range(len(dataset)):
-        img, paper, file_name, gts = dataset[i]
+        data = dataset[i]
+        img, gts, meta = data["image"], data["gt"], data["metadata"]
+        file_name = meta["File_name"]
+        paper = meta["Paper_idx"]
         if not os.path.exists(os.path.join(args.output, str(paper))):
             os.makedirs(os.path.join(args.output, str(paper)))
         perf = None
-        print("===================", file_name, "===================")
+        print("===================", file_name, meta["Type"], "===================")
         if file_name[0] == "P":
             idx = 0
         else:
@@ -80,25 +91,42 @@ def main(args):
         total_csv[idx] += 1
         for retry in range(MAX_RETRIES):
             print("***", retry+1, "trial ***")
-            try:
-                res, response = digitize(baseline_prompt, img, args.api, args.org, args.model)
-                with open(os.path.join(args.output, str(paper), file_name+".txt"), "w") as f:
-                    f.write(response)
-            except pd.errors.ParserError as e:
-                print(e)
-                invalid_format[idx] += 1
-                continue
-            except Exception as e:
-                logging.error(RED + str(e) + RESET)
-                input("Press Enter to continue...")
+            if args.eval_only:
+                res = []
+                results = os.listdir(args.output)
+                sample_idx = file_name[file_name.find("-O")+2:]
+                if "-" in sample_idx:
+                    sample_idx = sample_idx[:sample_idx.find("-")]
+                for paper_idx in results:
+                    if os.path.isdir(os.path.join(args.output, paper_idx)):
+                        files = os.listdir(os.path.join(args.output, paper_idx))
+                        for file in files:
+                            if file.endswith(".csv"):
+                                file_idx = file[file.find("-O")+2:file.rfind(".")]
+                                if "-" in file_idx:
+                                    file_idx = file_idx[:file_idx.find("-")]
+                                if file_idx == sample_idx and file_name in file:
+                                    res.append(pd.read_csv(os.path.join(args.output, paper_idx, file)))
+            else:
+                try:
+                    res, response = digitize(baseline_prompt, img, args.api, args.org, args.model)
+                    with open(os.path.join(args.output, str(paper), file_name+".txt"), "w") as f:
+                        f.write(response)
+                except pd.errors.ParserError as e:
+                    print(e)
+                    invalid_format[idx] += 1
+                    continue
+                except Exception as e:
+                    logging.error(RED + str(e) + RESET)
+                    input("Press Enter to continue...")
             
-            if res == None:
-                continue
-            for i, df in enumerate(res):
-                if len(res) == 1:
-                    df.to_csv(os.path.join(args.output, str(paper), file_name+".csv"), index=False)
-                else:
-                    df.to_csv(os.path.join(args.output, str(paper), f"{file_name}-{i}.csv"), index=False)
+                if res == None:
+                    continue
+                for i, df in enumerate(res):
+                    if len(res) == 1:
+                        df.to_csv(os.path.join(args.output, str(paper), file_name+".csv"), index=False)
+                    else:
+                        df.to_csv(os.path.join(args.output, str(paper), f"{file_name}-{i}.csv"), index=False)
             
             try:
                 if file_name[0] == "P":
@@ -162,11 +190,11 @@ def main(args):
         print("Final performance:", final_perfs["tables"])
     print("\n====================================")
 
-    with open(os.path.join(args.output, "perfs.json"), "w") as f:
+    with open(os.path.join(args.output, "no-P-30-O2/perfs_dot.json"), "w") as f:
         json.dump(final_perfs, f, indent=4)
-    with open(os.path.join(args.output, "perfs_per_paper.json"), "w") as f:
+    with open(os.path.join(args.output, "no-P-30-O2/perfs_per_paper_dot.json"), "w") as f:
         json.dump(perfs_per_paper, f, indent=4)
-    with open(os.path.join(args.output, "perf_per_sample.json"), "w") as f:
+    with open(os.path.join(args.output, "no-P-30-O2/perf_per_sample_dot.json"), "w") as f:
         json.dump(perf_per_sample, f, indent=4)
 
 if __name__ == "__main__":
@@ -176,6 +204,7 @@ if __name__ == "__main__":
     parser.add_argument('--api', type=str, help='OpenAI API key')
     parser.add_argument('--org', type=str, help='OpenAI organization')
     parser.add_argument('--model', type=str)
+    parser.add_argument('--eval_only', action="store_true")
     args = parser.parse_args()
 
     main(args)
