@@ -5,7 +5,7 @@ import pandas as pd
 import logging
 import json
 
-from Baseline.gpt import GPT, Claude, Qwen, Molmo, LLAVA
+from Baseline.mllm import GPT, Claude, Qwen, Molmo, LLAVA
 from Baseline.baseline import baseline_prompt
 from PlotEvaluator import evaluate_plot, merge_perf, WrongCSVNumberError, FormatError
 from TableEvaluator import evaluate_table
