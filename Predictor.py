@@ -5,7 +5,7 @@ import pandas as pd
 import logging
 import json
 
-from Baseline.gpt import digitize
+from Baseline.gpt import GPT, Claude, Qwen, Molmo, LLAVA
 from Baseline.baseline import baseline_prompt
 from PlotEvaluator import evaluate_plot, merge_perf, WrongCSVNumberError, FormatError
 from TableEvaluator import evaluate_table
@@ -38,16 +38,15 @@ class Dataset:
         return len(self.samples)
     
     def __getitem__(self, idx):
-        path, paper, name = self.samples[idx]
+        img_path, paper, name = self.samples[idx]
         sample_idx = name[name.find("-O")+2:]
         if "P" == name[0]:
             meta = self.metadata.loc[self.names.index(name)].to_dict()
             meta["Paper_idx"] = paper
         else:
             meta = {"Type": "Table", "Paper_idx": paper}
-        img = cv2.imread(path)
         gts = []
-        path = path[:path.rfind("/")]
+        path = img_path[:img_path.rfind("/")]
         files = sorted(os.listdir(path))
         for file in files:
             if not file.endswith(".csv"):
@@ -61,9 +60,20 @@ class Dataset:
                         gts.append(f.read())
                 else:
                     gts.append(pd.read_csv(os.path.join(path, file)))
-        return {"image": img, "gt": gts, "metadata": meta}
+        return {"image_path": img_path, "gt": gts, "metadata": meta}
 
 def main(args):
+    if "gpt" in args.model.lower():
+        mllm = GPT(args.api, args.org, args.model)
+    elif "claude" in args.model.lower():
+        mllm = Claude(args.api, args.org, args.model)
+    elif "qwen" in args.model.lower():
+        mllm = Qwen(args.model)
+    elif "molmo" in args.model.lower():
+        mllm = Molmo(args.model)
+    elif "llava" in args.model.lower():
+        mllm = LLAVA(args.model)
+    
     train_paper = ["2", "8", "10", "12", "14", "16", "20", "26", "32", "34", "38", "40", "41", "42", "43", "47", "49", "52", "55", "58", "61", "66", "68", "74", "86", "90", "92", "100"]
     valid_paper = ["4", "6", "18", "22", "24", "28", "30", "36", "46", "48", "56", "62", "72", "84", "88", "94", "96", "100"]
     dataset = Dataset(args.root, ["P"], valid_paper)
@@ -77,7 +87,7 @@ def main(args):
 
     for i in range(len(dataset)):
         data = dataset[i]
-        img, gts, meta = data["image"], data["gt"], data["metadata"]
+        img_path, gts, meta = data["image_path"], data["gt"], data["metadata"]
         file_name = meta["File_name"]
         paper = meta["Paper_idx"]
         if not os.path.exists(os.path.join(args.output, str(paper))):
@@ -109,7 +119,7 @@ def main(args):
                                     res.append(pd.read_csv(os.path.join(args.output, paper_idx, file)))
             else:
                 try:
-                    res, response = digitize(baseline_prompt, img, args.api, args.org, args.model)
+                    response, res = mllm.query(baseline_prompt, img_path)
                     with open(os.path.join(args.output, str(paper), file_name+".txt"), "w") as f:
                         f.write(response)
                 except pd.errors.ParserError as e:
