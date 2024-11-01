@@ -1072,5 +1072,57 @@ class TestPlotEvaluatorGeneral(TestPlotEvaluator):
         ans["Curve recall"] = 1
         self.assertSameDict(perf, ans)
 
+    def test_multi_err_bar(self):
+        pred = [pd.read_csv("Tests/evaluator/P-74-O3_pred.csv")]
+        gt = [pd.read_csv("Tests/evaluator/P-74-O3_gt.csv")]
+        perf = evaluate_plot(pred, gt)
+
+        pred_value = [0.2, 0.0, 0.1, 0.5]
+        pred_err = [[0.15, 0.1, 0.2, 0.1], [0.2, 0.12, 0.23, 0.17]]
+        gt_value = [0.1641086186540732, -0.0059031877213694, 0.225974025974026, 0.4229043683589138]
+        gt_err = [[0.315625, 0.1875, 0.4197916666666667, 0.43125], [0.3787485242030696, 0.2219598583234946, 0.4987012987012986, 0.5147579693034238]]
+        pred_err_flat = np.array(pred_err[0] + pred_err[1])
+        gt_err_flat = np.array(gt_err[0] + gt_err[1])
+        scales = [np.max(gt_err[0]) - np.min(gt_err[0]), np.max(gt_err[1]) - np.min(gt_err[1])]
+        means = [np.mean(gt_err[0]), np.mean(gt_err[1])]
+
+        def gen_ans():
+            return {
+                "Value performance": cal_metrics(np.array(pred_value), np.array(gt_value), np.max(gt_value) - np.min(gt_value), np.mean(gt_value)),
+                "Error performance": {
+                    "MAE": np.mean(np.abs(pred_err_flat - gt_err_flat)),
+                    "MAPE": np.mean(np.abs(pred_err_flat - gt_err_flat) / gt_err_flat),
+                    "MAPE_eps": np.mean(np.abs(pred_err_flat - gt_err_flat) / (gt_err_flat + 1e-5)),
+                    "SMAPE": np.mean(np.abs(pred_err_flat - gt_err_flat) / (np.abs(pred_err_flat) + np.abs(gt_err_flat + 1e-5))) * 2,
+                    "MASE": np.mean(np.concatenate([np.abs(np.array(pred_err[0]) - np.array(gt_err[0])) / scales[0],
+                                                    np.abs(np.array(pred_err[1]) - np.array(gt_err[1])) / scales[1]])),
+                    "R-squared": 1 - np.sum(np.concatenate([
+                        np.square(np.array(pred_err[0]) - np.array(gt_err[0])) / np.sum(np.square(gt_err[0] - means[0])), 
+                        np.square(np.array(pred_err[1]) - np.array(gt_err[1])) / np.sum(np.square(gt_err[1] - means[1]))
+                    ]))
+                },
+                "Curve accuracy": 1,
+                "Curve recall": 1,
+                "DP accuracy": 1,
+                "DP recall": 1
+            }
+        self.assertSameDict(perf, gen_ans())
+
+        pred = [pd.read_csv("Tests/evaluator/P-74-O3_pred_missing_err.csv")]
+        perf = evaluate_plot(pred, gt)
+        pred_err = [[0.2, 0.1, 0.2, 0.1], [0.2, 0.1, 0.2, 0.1]]
+        pred_err_flat = np.array(pred_err[0] + pred_err[1])
+        self.assertSameDict(perf, gen_ans())
+
+        gt = [pd.read_csv("Tests/evaluator/P-74-O3_pred_missing_err.csv")]
+        pred = [pd.read_csv("Tests/evaluator/P-74-O3_gt.csv")]
+        perf = evaluate_plot(pred, gt)
+        pred_value, gt_value = gt_value, pred_value
+        pred_err, gt_err = gt_err, pred_err
+        pred_err_flat, gt_err_flat = gt_err_flat, pred_err_flat
+        scales = [np.max(gt_err[0]) - np.min(gt_err[0]), np.max(gt_err[0]) - np.min(gt_err[0])]
+        means = [np.mean(gt_err[0]), np.mean(gt_err[0])]
+        self.assertSameDict(perf, gen_ans())
+
 if __name__ == "__main__":
     unittest.main()

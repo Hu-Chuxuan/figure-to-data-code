@@ -15,6 +15,8 @@ Potential types of outputs: float, ndarray, str, None
 def process(value):
     if type(value) == np.ndarray:
         return value
+    if type(value) == tuple:
+        return tuple([process(val) for val in value])
     if value is None or (type(value) == float and np.isnan(value)):
         return None
     if type(value) == str:
@@ -264,6 +266,8 @@ def separate_curve(df):
         curves[cur_subplot][cur_type2]["y"].append(df["Value"][i])
         if "Error Bar Length" in df.columns:
             curves[cur_subplot][cur_type2]["err"].append(df["Error Bar Length"][i])
+        elif "Error Bar Length 1" in df.columns and "Error Bar Length 2" in df.columns:
+            curves[cur_subplot][cur_type2]["err"].append((df["Error Bar Length 1"][i], df["Error Bar Length 2"][i]))
     return curves, num
 
 '''
@@ -425,6 +429,12 @@ def cal_perf(curves_in_subplot):
 
 def cal_metrics(pred_values, gt_values, scale, mean):
     perf = {}
+    if len(pred_values.shape) == 1 and len(gt_values.shape) == 2:
+        pred_values = pred_values.reshape(-1, 1)
+    elif len(pred_values.shape) == 2 and len(gt_values.shape) == 1:
+        gt_values = gt_values.reshape(-1, 1)
+        scale = np.array([scale]).reshape(-1, 1)
+        mean = np.array([mean]).reshape(-1, 1)
     # Mean Absolute Error
     perf["MAE"] = np.mean(np.abs(pred_values - gt_values))
     # Mean Absolute Percentage Error
@@ -435,12 +445,15 @@ def cal_metrics(pred_values, gt_values, scale, mean):
     # Symmetric Mean Absolute Percentage Error
     perf["SMAPE"] = np.mean(np.abs(pred_values - gt_values) / (np.abs(pred_values) + np.abs(gt_values) + 1e-5)) * 2
     # Mean Absolute Scaled Error
-    if scale != 0:
-        perf["MASE"] = np.mean(np.abs(pred_values - gt_values)) / scale
+    if (len(gt_values.shape) == 1 and scale != 0) or (len(gt_values.shape) > 1 and scale[0] != 0):
+        perf["MASE"] = np.mean(np.abs(pred_values - gt_values) / scale)
     # R-squared
-    r2_denom = np.sum((gt_values - mean) ** 2)
-    if r2_denom != 0:
-        perf["R-squared"] = 1 - np.sum((pred_values - gt_values) ** 2) / r2_denom
+    if len(gt_values.shape) == 1:
+        r2_denom = np.sum((gt_values - mean) ** 2)
+    else:
+        r2_denom = np.sum((gt_values - mean) ** 2, axis=0)
+    if (len(gt_values.shape) == 1 and r2_denom != 0) or (len(gt_values.shape) > 1 and r2_denom[0] != 0):
+        perf["R-squared"] = 1 - np.sum((pred_values - gt_values) ** 2 / r2_denom)
 
     return perf
 
@@ -497,8 +510,12 @@ def evaluate_plot(pred_df, gt_df):
                 gt_curve.interpolate(x_common)
                 curves.append({"pred": pred_curve, "gt": gt_curve, "y scale": np.max(gt_curve.y) - np.min(gt_curve.y), "y mean": np.mean(gt_curve.y)})
                 if gt_curve.err is not None:
-                    curves[-1]["err scale"] = np.max(gt_curve.err) - np.min(gt_curve.err)
-                    curves[-1]["err mean"] = np.mean(gt_curve.err)
+                    if len(gt_curve.err.shape) == 1:
+                        curves[-1]["err scale"] = np.max(gt_curve.err) - np.min(gt_curve.err)
+                        curves[-1]["err mean"] = np.mean(gt_curve.err)
+                    else:
+                        curves[-1]["err scale"] = np.max(gt_curve.err, axis=0) - np.min(gt_curve.err, axis=0)
+                        curves[-1]["err mean"] = np.mean(gt_curve.err, axis=0)
             else:
                 # This is a discrete plot
                 curve = {"pred_len": len(pred_curve), "gt_len": len(gt_curve)}
@@ -510,8 +527,12 @@ def evaluate_plot(pred_df, gt_df):
                     curve["y scale"] = np.max(gt_curve.y) - np.min(gt_curve.y)
                     curve["y mean"] = np.mean(gt_curve.y)
                 if gt_curve.err is not None:
-                    curve["err scale"] = np.max(gt_curve.err) - np.min(gt_curve.err)
-                    curve["err mean"] = np.mean(gt_curve.err)
+                    if len(gt_curve.err.shape) == 1:
+                        curve["err scale"] = np.max(gt_curve.err) - np.min(gt_curve.err)
+                        curve["err mean"] = np.mean(gt_curve.err)
+                    else:
+                        curve["err scale"] = np.max(gt_curve.err, axis=0) - np.min(gt_curve.err, axis=0)
+                        curve["err mean"] = np.mean(gt_curve.err, axis=0)
                 
                 if curve["pred_len"] < curve["gt_len"]:
                     paired_pred_curve, paired_gt_curve = pair_data_points(pred_curve, gt_curve)
