@@ -7,7 +7,11 @@ from Exceptions import WrongCSVNumberError, FormatError, YELLOW, BLUE, MAGENTA, 
 from TableEvaluator import parse_range
 
 USE_MASE = False
+DEBUG = False
 
+'''
+Potential types of outputs: float, ndarray, str, None
+'''
 def process(value):
     if type(value) == np.ndarray:
         return value
@@ -124,21 +128,45 @@ def is_empty(value):
         return value == ""
     return value is None or (type(value) == float and np.isnan(value))
 
+def str_cost_fn(pred, gt):
+    pred = pred.strip().lower()
+    gt = gt.strip().lower()
+    if pred == gt:
+        return 0
+    if len(pred) <= len(gt) and gt.endswith(pred):
+        return len(gt) - len(pred)
+    if len(gt) <= len(pred) and pred.endswith(gt):
+        return len(pred) - len(gt)
+    # remove puctuations with 0.5 cost each chacacter
+    pred_ptr, gt_ptr = 0, 0
+    cost = 0
+    while pred_ptr < len(pred) or gt_ptr < len(gt):
+        if pred_ptr < len(pred) and gt_ptr < len(gt) and pred[pred_ptr] == gt[gt_ptr]:
+            pred_ptr += 1
+            gt_ptr += 1
+        elif pred_ptr < len(pred) and not pred[pred_ptr].isalpha() and not pred[pred_ptr].isdigit():
+            pred_ptr += 1
+            cost += 0.5
+        elif gt_ptr < len(gt) and not gt[gt_ptr].isalpha() and not gt[gt_ptr].isdigit():
+            gt_ptr += 1
+            cost += 0.5
+        else:
+            return np.inf
+    return cost
+
 '''
 @description: calculate the score of the pair of two values
 @return: the score of the pair. np.inf if the two values are completely different strings
 '''
 def pair_score(pred, gt):
-    if type(gt) == str:
-        if type(pred) == np.ndarray:
-            return np.inf
-        return 0 if gt == pred else np.inf
     if is_empty(pred) and is_empty(gt):
         return 0
     if is_empty(pred) or is_empty(gt):
         return np.inf
     if type(pred) != type(gt):
         return np.inf
+    if type(gt) == str:
+        return str_cost_fn(pred, gt)
     return cost_fn(pred, gt)
 
 '''
@@ -217,6 +245,7 @@ def pair_data_points(pred_curve: Curve, gt_curve: Curve):
 def separate_curve(df):
     cur_subplot, cur_type2 = None, None
     curves = {}
+    num = 0
     for i in range(len(df)):
         if "Subplot Value" in df.columns and cur_subplot != df["Subplot Value"][i]:
             cur_subplot = df["Subplot Value"][i]
@@ -226,13 +255,16 @@ def separate_curve(df):
             cur_type2 = df["Type-2"][i]
             if isinstance(cur_type2, float) and np.isnan(cur_type2):
                 cur_type2 = None
-        if (cur_subplot, cur_type2) not in curves:
-            curves[(cur_subplot, cur_type2)] = {"x": [], "y": [], "err": []}
-        curves[(cur_subplot, cur_type2)]["x"].append(df["Type-1"][i])
-        curves[(cur_subplot, cur_type2)]["y"].append(df["Value"][i])
+        if cur_subplot not in curves:
+            curves[cur_subplot] = {}
+        if cur_type2 not in curves[cur_subplot]:
+            curves[cur_subplot][cur_type2] = {"x": [], "y": [], "err": []}
+            num += 1
+        curves[cur_subplot][cur_type2]["x"].append(df["Type-1"][i])
+        curves[cur_subplot][cur_type2]["y"].append(df["Value"][i])
         if "Error Bar Length" in df.columns:
-            curves[(cur_subplot, cur_type2)]["err"].append(df["Error Bar Length"][i])
-    return curves
+            curves[cur_subplot][cur_type2]["err"].append(df["Error Bar Length"][i])
+    return curves, num
 
 '''
 @params:
@@ -242,43 +274,94 @@ def separate_curve(df):
     paired_curves: Dict, subplot_gt -> List of curve pairs (pred_curve, gt_curve)
 '''
 def pair_curves(pred_curves, gt_curves):
+    unpaired_gt_subplot = []
+    unpaired_pred_subplot = []
+
     paired_curves = {}
-    paired = {}
-    pair_trace = ""
-    for subplot_gt, type2_gt in gt_curves.keys():
+    paired_subplots = {}
+    for subplot_gt in gt_curves.keys():
         best_score = np.inf
-        best_subplot_pred, best_type2_pred = None, None
-        for subplot_pred, type2_pred in pred_curves.keys():
-            if (subplot_pred, type2_pred) in paired:
+        best_subplot_pred = None
+        for subplot_pred in pred_curves.keys():
+            if subplot_pred in paired_subplots:
                 continue
-            subplot_score = pair_score(process(subplot_pred), process(subplot_gt))
-            type2_score = pair_score(process(type2_pred), process(type2_gt))
-            score = subplot_score + type2_score
+            score = pair_score(subplot_pred, subplot_gt)
             if score < best_score:
                 best_score = score
                 best_subplot_pred = subplot_pred
-                best_type2_pred = type2_pred
         if best_score < np.inf:
-            paired[(best_subplot_pred, best_type2_pred)] = (subplot_gt, type2_gt)
-            pred_curve = pred_curves[(best_subplot_pred, best_type2_pred)]
-            pair_trace += f"Pairing ({subplot_gt}, {best_subplot_pred}) and ({type2_gt}, {best_type2_pred})\n"
+            paired_subplots[best_subplot_pred] = subplot_gt
         else:
-            pred_curve = {}
-            pair_trace += f"Curve ({subplot_gt}, {type2_gt}) cannot be paired with any curve in prediction\n"
-        if subplot_gt not in paired_curves:
+            if subplot_gt not in unpaired_gt_subplot:
+                unpaired_gt_subplot.append(subplot_gt)
             paired_curves[subplot_gt] = []
-        gt_curve = gt_curves[(subplot_gt, type2_gt)]
-        paired_curves[subplot_gt].append((Curve(pred_curve), Curve(gt_curve)))
+            for type2_gt in gt_curves[subplot_gt].keys():
+                gt_curve = gt_curves[subplot_gt][type2_gt]
+                pred_curve = {}
+                paired_curves[subplot_gt].append((Curve(pred_curve), Curve(gt_curve)))
     
-    pair_trace += "Unpaired curves in prediction:\n"
-    for subplot_pred, type2_pred in pred_curves.keys():
-        if (subplot_pred, type2_pred) not in paired:
-            pred_curve = pred_curves[(subplot_pred, type2_pred)]
-            if subplot_pred not in paired_curves:
-                paired_curves[subplot_pred] = []
-            paired_curves[subplot_pred].append((Curve(pred_curve), Curve({})))
-            pair_trace += f"({subplot_pred}, {type2_pred}), "
-    pair_trace += "\n"
+    for subplot_pred in pred_curves.keys():
+        if subplot_pred not in paired_subplots:
+            unpaired_pred_subplot.append(subplot_pred)
+            paired_curves[subplot_pred] = []
+            for type2_pred in pred_curves[subplot_pred].keys():
+                pred_curve = pred_curves[subplot_pred][type2_pred]
+                gt_curve = {}
+                paired_curves[subplot_pred].append((Curve(pred_curve), Curve(gt_curve)))
+    
+    for subplot_pred, subplot_gt in paired_subplots.items():
+        paired = {}
+        unpaired_gt_curve, unpaired_pred_curve = [], []
+        if len(gt_curves[subplot_gt]) == 1 and len(pred_curves[subplot_pred]) == 1:
+            paired_curves[subplot_gt] = [
+                (Curve(list(pred_curves[subplot_pred].values())[0]), 
+                 Curve(list(gt_curves[subplot_gt].values())[0]))
+            ]
+            continue
+        for type2_gt in gt_curves[subplot_gt].keys():
+            best_score = np.inf
+            best_type2_pred = None
+            for type2_pred in pred_curves[subplot_pred].keys():
+                if type2_pred in paired:
+                    continue
+                score = pair_score(process(type2_pred), process(type2_gt))
+                if score < best_score:
+                    best_score = score
+                    best_type2_pred = type2_pred
+            if best_score < np.inf:
+                paired[best_type2_pred] = type2_gt
+                pred_curve = pred_curves[subplot_pred][best_type2_pred]
+            else:
+                pred_curve = {}
+                unpaired_gt_curve.append(type2_gt)
+            if subplot_gt not in paired_curves:
+                paired_curves[subplot_gt] = []
+            gt_curve = gt_curves[subplot_gt][type2_gt]
+            paired_curves[subplot_gt].append((Curve(pred_curve), Curve(gt_curve)))
+        
+        for type2_pred in pred_curves[subplot_pred].keys():
+            if type2_pred not in paired:
+                unpaired_pred_curve.append(type2_pred)
+                gt_curve = {}
+                paired_curves[subplot_gt].append((Curve(pred_curves[subplot_pred][type2_pred]), Curve(gt_curve)))
+        
+        if DEBUG:
+            paired = {k: v for k, v in paired.items() if k != v}
+            if len(paired) > 0:
+                print(BLUE + "Paired type2:", paired, RESET)
+            if len(unpaired_gt_curve) > 0:
+                print(MAGENTA + "Unpaired gt curve:", unpaired_gt_curve, RESET)
+            if len(unpaired_pred_curve) > 0:
+                print(MAGENTA + "Unpaired pred curve:", unpaired_pred_curve, RESET)
+    if DEBUG:
+        paired_subplots = {k: v for k, v in paired_subplots.items() if k != v}
+        if len(paired_subplots) > 0:
+            print(BLUE + "Paired subplots:", paired_subplots, RESET)
+        if len(unpaired_gt_subplot) > 0:
+            print(MAGENTA + "Unpaired gt subplot:", unpaired_gt_subplot, RESET)
+        if len(unpaired_pred_subplot) > 0:
+            print(MAGENTA + "Unpaired pred subplot:", unpaired_pred_subplot, RESET)
+
 
     return paired_curves
 
@@ -321,6 +404,8 @@ def cal_perf(curves_in_subplot):
                     perf["X performance"] = cal_metrics(pred_x, gt_x, curve["x scale"], curve["x mean"])
                 perf["Value performance"] = cal_metrics(curve["pred"].y, curve["gt"].y, curve["y scale"], curve["y mean"])
                 if curve["gt"].err is not None:
+                    if curve["pred"].err is None:
+                        curve["pred"].err = np.zeros_like(curve["gt"].err)
                     perf["Error performance"] = cal_metrics(curve["pred"].err, curve["gt"].err, curve["err scale"], curve["err mean"])
             if "gt_len" in curve:
                 if curve["gt_len"] == 0:
@@ -374,15 +459,15 @@ def evaluate_plot(pred_df, gt_df):
         if col not in ["Value", "Subplot Value", "Error Bar Length"] and not re.match(r"Type-\d+", col) and not re.match(r"Error Bar Length \d+", col):
             raise FormatError(f"The column {col} in the predicted CSV file is not a valid column.")
     
-    pred_curves = separate_curve(pred_df)
-    gt_curves = separate_curve(gt_df)
+    pred_curves, pred_num = separate_curve(pred_df)
+    gt_curves, gt_num = separate_curve(gt_df)
 
-    if len(gt_curves) <= len(pred_curves):
-        paired_curves = pair_curves(pred_curves, gt_curves)
-        pred_idx, gt_idx = 0, 1
-    else:
-        paired_curves = pair_curves(gt_curves, pred_curves)
-        pred_idx, gt_idx = 1, 0
+    # if len(gt_curves) <= len(pred_curves):
+    paired_curves = pair_curves(pred_curves, gt_curves)
+    pred_idx, gt_idx = 0, 1
+    # else:
+    #     paired_curves = pair_curves(gt_curves, pred_curves)
+    #     pred_idx, gt_idx = 1, 0
 
     if len(paired_curves) == 0:
         perf = {"DP accuracy": 0, "DP recall": 0, "Curve accuracy": 0, "Curve recall": 0}
@@ -437,9 +522,9 @@ def evaluate_plot(pred_df, gt_df):
                 curves.append(curve)
         curves_in_subplot[subplot_gt] = curves
     perf = cal_perf(curves_in_subplot)
-    perf["Curve accuracy"] = paired_curve_num / len(gt_curves)
+    perf["Curve accuracy"] = paired_curve_num / gt_num
     if len(pred_curves) == 0:
         perf["Curve recall"] = 0
     else:
-        perf["Curve recall"] = paired_curve_num / len(pred_curves)
+        perf["Curve recall"] = paired_curve_num / pred_num
     return perf

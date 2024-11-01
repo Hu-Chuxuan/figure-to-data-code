@@ -8,7 +8,7 @@ from PlotEvaluator import evaluate_plot, cal_perf, merge_perf, cal_metrics, pair
 
 class TestPlotEvaluator(unittest.TestCase):
     def assertSameDict(self, pred, gt):
-        # self.assertEqual(set(pred.keys()), set(gt.keys()))
+        self.assertEqual(set(pred.keys()), set(gt.keys()))
         for key in gt.keys():
             if key not in pred:
                 self.fail(f"Key {key} not in pred")
@@ -368,7 +368,10 @@ class TestPlotEvaluatorCalPerf(TestPlotEvaluator):
                     "x scale": x_scales[1], "x mean": x_means[1],
                     "y scale": y_scales[1], "y mean": y_means[1],
                 },
-                { "gt": Curve({}), "pred": Curve({}), "gt_len": 5, "pred_len": 0 }
+                { 
+                    "gt": Curve({ "x": gt_x[1], "y": gt_value[1] }), 
+                    "pred": Curve({}), "gt_len": 5, "pred_len": 0 
+                }
             ]
         }
         curves = [
@@ -405,8 +408,10 @@ class TestPlotEvaluatorCalPerf(TestPlotEvaluator):
         }
         self.assertSameDict(cal_perf(curves_in_subplot), ans)
 
-        curves_in_subplot["1"][-1]["gt_len"] = 0
-        curves_in_subplot["1"][-1]["pred_len"] = 5
+        curves_in_subplot["1"][-1] = {
+            "gt": Curve({}), "pred": Curve({ "x": pred_x[1], "y": pred_value[1] }), 
+            "gt_len": 0, "pred_len": 5
+        }
         self.assertSameDict(cal_perf(curves_in_subplot), ans)
 
     def test_cal_perf_missing_or_extra_subplot(self):
@@ -436,7 +441,10 @@ class TestPlotEvaluatorCalPerf(TestPlotEvaluator):
                     "y scale": y_scales[1], "y mean": y_means[1],
                 }
             ],
-            "2": [ { "gt": Curve({}), "pred": Curve({}), "gt_len": 5, "pred_len": 0 } ]
+            "2": [{ 
+                "gt": Curve({ "x": gt_x[1], "y": gt_value[1] }),
+                "pred": Curve({}), "gt_len": 5, "pred_len": 0 
+            }]
         }
         curves = [
             {
@@ -472,8 +480,10 @@ class TestPlotEvaluatorCalPerf(TestPlotEvaluator):
         }
         self.assertSameDict(cal_perf(curves_in_subplot), ans)
 
-        curves_in_subplot["2"][0]["gt_len"] = 0
-        curves_in_subplot["2"][0]["pred_len"] = 5
+        curves_in_subplot["2"][0] = {
+            "gt": Curve({}), "pred": Curve({ "x": pred_x[1], "y": pred_value[1] }), 
+            "gt_len": 0, "pred_len": 5
+        }
         self.assertSameDict(cal_perf(curves_in_subplot), ans)
 
 class TestPlotEvaluatorPairing(TestPlotEvaluator):
@@ -514,8 +524,9 @@ class TestPlotEvaluatorPairing(TestPlotEvaluator):
     def gen_curves(self, curve_num):
         curves = {}
         for i, num in enumerate(curve_num):
+            curves[chr(65+i)] = {}
             for j in range(num):
-                curves[(chr(65+i), str(j+1))] = {"y": list(range(i*10+j+1))}
+                curves[chr(65+i)][str(j+1)] = {"y": list(range(i*10+j+1))}
         return curves
     
     def gen_ans(self, curve_num):
@@ -527,7 +538,7 @@ class TestPlotEvaluatorPairing(TestPlotEvaluator):
         return ans
     
     def assertSameCurvePair(self, pair1, pair2):
-        self.assertEqual(list(pair1.keys()), list(pair2.keys()))
+        self.assertEqual(sorted(list(pair1.keys())), sorted(list(pair2.keys())))
         for key in pair1.keys():
             self.assertEqual(len(pair1[key]), len(pair2[key]))
             for i in range(len(pair1[key])):
@@ -545,7 +556,7 @@ class TestPlotEvaluatorPairing(TestPlotEvaluator):
         curve_num = [2, 1, 3]
         pred_curves = self.gen_curves(curve_num)
         gt_curves = self.gen_curves(curve_num)
-        del pred_curves[("C", "2")]
+        del pred_curves["C"]["2"]
         paired_curves = pair_curves(pred_curves, gt_curves)
 
         ans = self.gen_ans(curve_num)
@@ -639,7 +650,10 @@ class TestPlotEvaluatorGeneral(TestPlotEvaluator):
                 }
             ]
         }
-        self.assertSameDict(perf, cal_perf(curves_in_subplot))
+        ans = cal_perf(curves_in_subplot)
+        ans["Curve accuracy"] = 1
+        ans["Curve recall"] = 1
+        self.assertSameDict(perf, ans)
     
     def test_hist_range(self):
         # histogram with Type-1 being range + no subplot value + no type-2
@@ -662,7 +676,10 @@ class TestPlotEvaluatorGeneral(TestPlotEvaluator):
                 }
             ]
         }
-        self.assertSameDict(perf, cal_perf(curves_in_subplot))
+        ans = cal_perf(curves_in_subplot)
+        ans["Curve accuracy"] = 1
+        ans["Curve recall"] = 1
+        self.assertSameDict(perf, ans)
 
     def test_cont_simple(self):
         # continuous plot + multiple curves + no subplot valuez
@@ -705,7 +722,10 @@ class TestPlotEvaluatorGeneral(TestPlotEvaluator):
                 }
             ]
         }
-        self.assertSameDict(perf, cal_perf(curves_in_subplot))
+        ans = cal_perf(curves_in_subplot)
+        ans["Curve accuracy"] = 1
+        ans["Curve recall"] = 1
+        self.assertSameDict(perf, ans)
 
     def test_gt_more_than_pred(self):
         # ground truth has more data then prediction 
@@ -741,7 +761,10 @@ class TestPlotEvaluatorGeneral(TestPlotEvaluator):
                 }
             ]
         }
-        self.assertSameDict(perf, cal_perf(curves_in_subplot))
+        ans = cal_perf(curves_in_subplot)
+        ans["Curve accuracy"] = 1
+        ans["Curve recall"] = 1
+        self.assertSameDict(perf, ans)
 
     def test_pred_more_than_gt(self):
         # prediction has more data then ground truth + Type-1 need estimation
@@ -764,7 +787,10 @@ class TestPlotEvaluatorGeneral(TestPlotEvaluator):
                 }
             ]
         }
-        self.assertSameDict(perf, cal_perf(curves_in_subplot))
+        ans = cal_perf(curves_in_subplot)
+        ans["Curve accuracy"] = 1
+        ans["Curve recall"] = 1
+        self.assertSameDict(perf, ans)
     
     def test_multi_subplot(self):
         # Type-1 and subplot value are float 
@@ -807,7 +833,10 @@ class TestPlotEvaluatorGeneral(TestPlotEvaluator):
                 "y scale": np.max(gt_v[2]) - np.min(gt_v[2]), "y mean": np.mean(gt_v[2])
             }]
         }
-        self.assertSameDict(perf, cal_perf(curves_in_subplot))
+        ans = cal_perf(curves_in_subplot)
+        ans["Curve accuracy"] = 1
+        ans["Curve recall"] = 1
+        self.assertSameDict(perf, ans)
 
     def test_missing_curve(self):
         pred = pd.read_csv("Tests/evaluator/P-2-O1_pred_missing_curve.csv")
@@ -835,7 +864,10 @@ class TestPlotEvaluatorGeneral(TestPlotEvaluator):
                 }
             ]
         }
-        self.assertSameDict(perf, cal_perf(curves_in_subplot))
+        ans = cal_perf(curves_in_subplot)
+        ans["Curve accuracy"] = 0.5
+        ans["Curve recall"] = 1
+        self.assertSameDict(perf, ans)
 
     def test_extra_curve(self):
         pred = pd.read_csv("Tests/evaluator/P-2-O1_pred_extra_curve.csv")
@@ -874,7 +906,10 @@ class TestPlotEvaluatorGeneral(TestPlotEvaluator):
                 }
             ]
         }
-        self.assertSameDict(perf, cal_perf(curves_in_subplot))
+        ans = cal_perf(curves_in_subplot)
+        ans["Curve accuracy"] = 1
+        ans["Curve recall"] = 2/3
+        self.assertSameDict(perf, ans)
 
     def test_missing_subplot(self):
         pred = pd.read_csv("Tests/evaluator/P-49-O6_pred_missing_subplot.csv")
@@ -912,7 +947,10 @@ class TestPlotEvaluatorGeneral(TestPlotEvaluator):
                 "gt_len": 10, "pred_len": 0
             }]
         }
-        self.assertSameDict(perf, cal_perf(curves_in_subplot))
+        ans = cal_perf(curves_in_subplot)
+        ans["Curve accuracy"] = 2/3
+        ans["Curve recall"] = 1
+        self.assertSameDict(perf, ans)
 
     def test_extra_subplot(self):
         pred = pd.read_csv("Tests/evaluator/P-49-O6_pred_extra_subplot.csv")
@@ -962,16 +1000,49 @@ class TestPlotEvaluatorGeneral(TestPlotEvaluator):
                 "gt_len": 0, "pred_len": 10 
             }]
         }
-        self.assertSameDict(perf, cal_perf(curves_in_subplot))
+        ans = cal_perf(curves_in_subplot)
+        ans["Curve accuracy"] = 1
+        ans["Curve recall"] = 3/4
+        self.assertSameDict(perf, ans)
 
     def test_pred_missing_err(self):
         pred = [pd.read_csv("Tests/evaluator/P-41-O2_pred.csv")]
+        gt = [pd.read_csv("Tests/evaluator/P-41-O2_gt.csv")]
+        perf = evaluate_plot(pred, gt)
+
+        pred_value = [[0.13, 0.15, 0.18, 0.9, 0.12, 0.11], [0.35, 0.32, 0.3, 0.28, 0.27, 0.29]]
+        gt_value = [[0.1005324813631522, 0.134185303514377, 0.1631522896698615, 0.1005324813631522, 0.1478168264110756, 0.1226837060702875], [0.3608093716719915, 0.3135250266240681, 0.2696485623003194, 0.2636847710330138, 0.3020234291799787, 0.2879659211927582]]
+        gt_err = [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0], [0.0298189563365282, 0.0259850905218317, 0.0323748668796592, 0.027689030883919, 0.027689030883919, 0.0255591054313099]]
+        pred_err = [[0]*len(gt_err[0]), [0]*len(gt_err[1])]
+        curves_in_subplot = {
+            "1": [
+                {
+                    "gt": Curve({"y": gt_value[0], "err": gt_err[0]}),
+                    "pred": Curve({"y": pred_value[0], "err": pred_err[0]}),
+                    "gt_len": 6, "pred_len": 6,
+                    "y scale": np.max(gt_value[0]) - np.min(gt_value[0]), "y mean": np.mean(gt_value[0]),
+                    "err scale": np.max(gt_err[0]) - np.min(gt_err[0]), "err mean": np.mean(gt_err[0])
+                },
+                {
+                    "gt": Curve({"y": gt_value[1], "err": gt_err[1]}),
+                    "pred": Curve({"y": pred_value[1], "err": pred_err[1]}),
+                    "gt_len": 6, "pred_len": 6,
+                    "y scale": np.max(gt_value[1]) - np.min(gt_value[1]), "y mean": np.mean(gt_value[1]),
+                    "err scale": np.max(gt_err[1]) - np.min(gt_err[1]), "err mean": np.mean(gt_err[1])
+                }
+            ]
+        }
+        ans = cal_perf(curves_in_subplot)
+        ans["Curve accuracy"] = 1
+        ans["Curve recall"] = 1
+        self.assertSameDict(perf, ans)
     
     def test_err_zero(self):
         pred = [pd.read_csv("Tests/evaluator/P-41-O5_pred.csv")]
+        gt = [pd.read_csv("Tests/evaluator/P-41-O5_gt.csv")]
+        perf = evaluate_plot(pred, gt)
     
     def test_partial_range(self):
-        pred = [pd.read_csv("Tests/evaluator/P-14-O2_pred2.csv")]
         pred = [pd.read_csv("Tests/evaluator/P-92-O6_pred.csv")]
         gt = [pd.read_csv("Tests/evaluator/P-92-O6_gt.csv")]
         perf = evaluate_plot(pred, gt)
@@ -996,7 +1067,10 @@ class TestPlotEvaluatorGeneral(TestPlotEvaluator):
                 "y scale": np.max(gt_y[1]) - np.min(gt_y[1]), "y mean": np.mean(gt_y[1])
             }]
         }
-        self.assertSameDict(perf, cal_perf(curves_in_subplot))
+        ans = cal_perf(curves_in_subplot)
+        ans["Curve accuracy"] = 1
+        ans["Curve recall"] = 1
+        self.assertSameDict(perf, ans)
 
 if __name__ == "__main__":
     unittest.main()
