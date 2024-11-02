@@ -65,6 +65,8 @@ def parse_range(value):
             except:
                 return None, None
             return start, end
+    if "–" in value:
+        value = value.replace("–", "-")
     if "-" in value:
         dash_indices = [i for i in range(len(value)) if value[i] == "-"]
         if dash_indices[0] == 0:
