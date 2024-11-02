@@ -1,8 +1,11 @@
 import re
 import pandas as pd
 import numpy as np
+from fuzzywuzzy import fuzz
 
 from Exceptions import WrongCSVNumberError, FormatError, YELLOW, BLUE, MAGENTA, RESET
+
+MIN_FUZZ_RATIO = 50
 
 def is_repeat(value, repeat):
     if len(repeat) == 0 or len(value) % len(repeat) != 0:
@@ -101,16 +104,18 @@ def is_empty(value):
 
 def is_match(pred, gt):
     if is_empty(gt):
-        return 1 if is_empty(pred) else 0, 1
-    pred_1, pred_2, pred_type = to_float(pred)
+        return 1 if is_empty(pred) else 0
     gt_1, gt_2, gt_type = to_float(gt)
     if gt_1 == None:
-        if is_empty(pred) or pred_1 != None:
-            return 0, 1
-        return 0, 0
+        if is_empty(pred):
+            return 0
+        if fuzz.ratio(str(pred), gt) >= MIN_FUZZ_RATIO:
+            return 1
+        return 0
+    pred_1, pred_2, pred_type = to_float(pred)
     if pred_1 == gt_1 and pred_2 == gt_2 and pred_type == gt_type:
-        return 1, 1
-    return 0, 1
+        return 1
+    return 0
 
 '''
 @raise:
@@ -130,6 +135,15 @@ def evaluate_table(pred_dfs, gt_dfs):
 
         if len(pred_df.columns) != len(gt_df.columns):
             raise FormatError(f"The predicted CSV file has {len(pred_df.columns)} columns while the ground truth CSV file has {len(gt_df.columns)} columns.")
+        for i, col in enumerate(gt_df.columns):
+            if "Empty Column" in col or "Unnamed" in col:
+                if "Empty Column" in pred_df.columns[i] or "Unnamed" in pred_df.columns[i]:
+                    same += 1
+            else:
+                gt = col
+                pred = pred_df.columns[i]
+                same += is_match(pred, gt)
+            total += 1
         for gt_row in range(len(gt_df)):
             for gt_col in range(len(gt_df.columns)):
                 if gt_row >= len(pred_df):
@@ -137,8 +151,7 @@ def evaluate_table(pred_dfs, gt_dfs):
                     continue
                 pred_value = pred_df.iloc[gt_row, gt_col]
                 gt_value = gt_df.iloc[gt_row, gt_col]
-                same_inc, total_inc = is_match(pred_value, gt_value)
-                same += same_inc
-                total += total_inc
+                same += is_match(pred_value, gt_value)
+                total += 1
 
     return {"Table accuracy": same / total}
