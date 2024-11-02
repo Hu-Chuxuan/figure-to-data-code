@@ -33,7 +33,7 @@ def process(value):
     return value
 
 class Curve:
-    def __setattr__(self, name: str, value: list) -> None:
+    def __setattr__(self, name: str, value: list):
         if value is None or len(value) == 0:
             super().__setattr__(name, None)
             return
@@ -82,8 +82,26 @@ class Curve:
         return len(self.y)
 
     def __init__(self, dict):
-        for key, value in dict.items():
-            setattr(self, key, value)
+        if "y" not in dict or len(dict["y"]) == 0:
+            return
+        
+        x, y, err = [], [], []
+
+        for i in range(len(dict["y"])):
+            processed_val = process(dict["y"][i])
+            if isinstance(processed_val, str) or is_empty(processed_val):
+                continue
+            if "err" in dict and len(dict["err"]) > 0:
+                processed_err = process(dict["err"][i])
+                if isinstance(processed_err, str) or is_empty(processed_err):
+                    continue
+                err.append(processed_err)
+            y.append(processed_val)
+            if "x" in dict and len(dict["x"]) > 0:
+                x.append(process(dict["x"][i]))
+        self.x = x
+        self.y = y
+        self.err = err
 
     def select(self, indices):
         if indices is None:
@@ -222,6 +240,18 @@ def pair_data_points(pred_curve: Curve, gt_curve: Curve):
     except:
         row_idx = None
         col_idx = None
+    if DEBUG:
+        unpaired_pred, unpaired_gt = [], []
+        for i in range(len(pred_curve)):
+            if i not in row_candidates or row_candidates.index(i) not in row_idx:
+                unpaired_pred.append(pred_curve.x[i])
+        for i in range(len(gt_curve)):
+            if i not in col_candidates or col_candidates.index(i) not in col_idx:
+                unpaired_gt.append(gt_curve.x[i])
+        if len(unpaired_pred) > 0:
+            print(YELLOW + "Unpaired pred data points:", unpaired_pred, RESET)
+        if len(unpaired_gt) > 0:
+            print(YELLOW + "Unpaired gt data points:", unpaired_gt, RESET)
     if row_idx is not None:
         for i in range(len(row_idx)):
             row_idx[i] = row_candidates[row_idx[i]]
@@ -475,12 +505,7 @@ def evaluate_plot(pred_df, gt_df):
     pred_curves, pred_num = separate_curve(pred_df)
     gt_curves, gt_num = separate_curve(gt_df)
 
-    # if len(gt_curves) <= len(pred_curves):
     paired_curves = pair_curves(pred_curves, gt_curves)
-    pred_idx, gt_idx = 0, 1
-    # else:
-    #     paired_curves = pair_curves(gt_curves, pred_curves)
-    #     pred_idx, gt_idx = 1, 0
 
     if len(paired_curves) == 0:
         perf = {"DP accuracy": 0, "DP recall": 0, "Curve accuracy": 0, "Curve recall": 0}
@@ -496,7 +521,7 @@ def evaluate_plot(pred_df, gt_df):
     for subplot_gt, curve_pairs in paired_curves.items():
         curves = []
         for curve_pair in curve_pairs:
-            pred_curve, gt_curve = curve_pair[pred_idx], curve_pair[gt_idx]
+            pred_curve, gt_curve = curve_pair[0], curve_pair[1]
             if len(pred_curve) == 0 or len(gt_curve) == 0:
                 curves.append({"pred": pred_curve, "gt": gt_curve, "gt_len": len(gt_curve), "pred_len": len(pred_curve)})
                 continue
@@ -534,10 +559,7 @@ def evaluate_plot(pred_df, gt_df):
                         curve["err scale"] = np.max(gt_curve.err, axis=0) - np.min(gt_curve.err, axis=0)
                         curve["err mean"] = np.mean(gt_curve.err, axis=0)
                 
-                if curve["pred_len"] < curve["gt_len"]:
-                    paired_pred_curve, paired_gt_curve = pair_data_points(pred_curve, gt_curve)
-                else:
-                    paired_gt_curve, paired_pred_curve = pair_data_points(gt_curve, pred_curve)
+                paired_pred_curve, paired_gt_curve = pair_data_points(pred_curve, gt_curve)
                 curve["pred"] = paired_pred_curve
                 curve["gt"] = paired_gt_curve
                 curves.append(curve)

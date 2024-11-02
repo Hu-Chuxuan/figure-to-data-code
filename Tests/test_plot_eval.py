@@ -596,9 +596,6 @@ class TestPlotEvaluatorPairing(TestPlotEvaluator):
         ans["C"] = new_c
         self.assertSameCurvePair(paired_curves, ans)
 
-    def DISABLE_test_pair_data_points(self):
-        pass
-    
     def DISABLE_test_cross_pairing(self):
         # histogram + multiple panels + no type-2
         pred = pd.read_csv("Tests/evaluator/P-14-O2_pred.csv")
@@ -1123,6 +1120,38 @@ class TestPlotEvaluatorGeneral(TestPlotEvaluator):
         scales = [np.max(gt_err[0]) - np.min(gt_err[0]), np.max(gt_err[0]) - np.min(gt_err[0])]
         means = [np.mean(gt_err[0]), np.mean(gt_err[0])]
         self.assertSameDict(perf, gen_ans())
+
+    def test_y_err_str(self):
+        pred = [pd.read_csv("Tests/evaluator/P-2-O1_pred_y_err_str.csv")]
+        gt = [pd.read_csv("Tests/evaluator/P-2-O1_gt.csv")]
+        perf = evaluate_plot(pred, gt)
+
+        pred_value = [[-0.15, -0.05, 0.1], [0.05]]
+        gt_value = [[-0.19574036511156184, -0.06186612576064909, 0.07403651115618659], [-0.36004056795131845, -0.13691683569979718, 0.08012170385395534]]
+        pred_err = [[0.1, 0.12, 0.09], [0.06]]
+        gt_err = [[0.22515212981744423, 0.11764705882352941, 0.23935091277890466], [0.2718052738336714, 0.1440162271805274, 0.29006085192697767]]
+        curves_in_subplot = {
+            "1": [
+                {
+                    "gt": Curve({"y": gt_value[0], "err": gt_err[0]}),
+                    "pred": Curve({"y": pred_value[0], "err": pred_err[0]}),
+                    "gt_len": 3, "pred_len": 3,
+                    "y scale": np.max(gt_value[0]) - np.min(gt_value[0]), "y mean": np.mean(gt_value[0]),
+                    "err scale": np.max(gt_err[0]) - np.min(gt_err[0]), "err mean": np.mean(gt_err[0])
+                },
+                {
+                    "gt": Curve({"y": gt_value[1][-1:], "err": gt_err[1][-1:]}),
+                    "pred": Curve({ "y": pred_value[1], "err": pred_err[1] }),
+                    "gt_len": 3, "pred_len": 1,
+                    "y scale": np.max(gt_value[1]) - np.min(gt_value[1]), "y mean": np.mean(gt_value[1]),
+                    "err scale": np.max(gt_err[1]) - np.min(gt_err[1]), "err mean": np.mean(gt_err[1])
+                }
+            ]
+        }
+        ans = cal_perf(curves_in_subplot)
+        ans["Curve accuracy"] = 1
+        ans["Curve recall"] = 1
+        self.assertSameDict(perf, ans)
 
 if __name__ == "__main__":
     unittest.main()

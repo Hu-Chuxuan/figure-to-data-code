@@ -1,28 +1,13 @@
 Subplot Value,Type-1,Type-2,Value
-Share of Immigrants,US,Actual,13
-Share of Immigrants,US,Perceived,35
-Share of Immigrants,UK,Actual,15
-Share of Immigrants,UK,Perceived,32
-Share of Immigrants,Sweden,Actual,18
-Share of Immigrants,Sweden,Perceived,30
-Share of Immigrants,Italy,Actual,9
-Share of Immigrants,Italy,Perceived,28
-Share of Immigrants,Germany,Actual,12
-Share of Immigrants,Germany,Perceived,27
-Share of Immigrants,France,Actual,11
-Share of Immigrants,France,Perceived,29
-Misperception (in % points),Not High Imm. Sect.,Actual,-5
-Misperception (in % points),H. Sect. & No College,Actual,20
-Misperception (in % points),H. Sect. & College,Actual,18
-Misperception (in % points),No College,Actual,15
-Misperception (in % points),College,Actual,10
-Misperception (in % points),Low Income,Actual,22
-Misperception (in % points),High Income,Actual,15
-Misperception (in % points),No Imm. Parent,Actual,25
-Misperception (in % points),Imm. Parent,Actual,20
-Misperception (in % points),Age 46-69,Actual,18
-Misperception (in % points),Age 18-45,Actual,15
-Misperception (in % points),Male,Actual,12
-Misperception (in % points),Female,Actual,20
-Misperception (in % points),Right-Wing,Actual,25
-Misperception (in % points),Left-Wing,Actual,18
+Share of Immigrants,US,Actual,.13
+Share of Immigrants,UK,Actual,.15
+Share of Immigrants,Sweden,Actual,.18
+Share of Immigrants,Italy,Actual,.9
+Share of Immigrants,Germany,Actual,.12
+Share of Immigrants,France,Actual,.11
+Share of Immigrants,US,Perceived (mean),.35
+Share of Immigrants,UK,Perceived (mean),.32
+Share of Immigrants,Sweden,Perceived (mean),.30
+Share of Immigrants,Italy,Perceived (mean),.28
+Share of Immigrants,Germany,Perceived (mean),.27
+Share of Immigrants,France,Perceived (mean),.29
