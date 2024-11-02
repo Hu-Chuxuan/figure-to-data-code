@@ -141,4 +141,4 @@ def evaluate_table(pred_dfs, gt_dfs):
                 same += same_inc
                 total += total_inc
 
-    return {"Accuracy": same / total, "Total": total, "Same": same}
+    return {"Table accuracy": same / total}

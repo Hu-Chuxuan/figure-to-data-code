@@ -4,6 +4,8 @@ import argparse
 import pandas as pd
 import logging
 import json
+import pickle as pkl
+import numpy as np
 
 from Baseline.mllm import GPT, Claude, Qwen, Molmo, LLAVA
 from Baseline.baseline import baseline_prompt
@@ -15,52 +17,84 @@ RED = '\033[91m'
 BLUE = '\033[94m'
 GREEN = '\033[92m'
 RESET = '\033[0m'
+PLOT_TYPES = ["Dot", "Histogram", "Continuous", "Combo"]
 
 class Dataset:
     def __init__(self, root, types, paper_list=None, read_txt=False):
+        self.root = root
         self.read_txt = read_txt
         self.samples = []
-        self.metadata = pd.read_csv(os.path.join(root, "metadata.csv"))
-        self.names = self.metadata["File_name"].tolist()
-        if paper_list is None:
-            paper_list = os.listdir(root)
-        for paper in paper_list:
-            if not os.path.isdir(os.path.join(root, paper)):
-                continue
-            samples = os.listdir(os.path.join(root, paper))
-            for sample in samples:
-                if sample[0] in types and (sample.endswith(".png") or sample.endswith(".jpeg")):
-                    name = sample[:sample.rfind(".")]
-                    if name[0] == "T" or name+".csv" in samples:
-                        self.samples.append((os.path.join(root, paper, sample), paper, name))
+        self.metadata = pkl.load(open(os.path.join(root, "metadata.pkl"), "rb"))
+        
+        for sample, meta in self.metadata.items():
+            if meta["Type"] in types:
+                if paper_list is None or meta["Paper Index"] in paper_list:
+                    self.samples.append(sample)
+        print("Number of samples:", len(self.samples))
     
     def __len__(self):
         return len(self.samples)
     
     def __getitem__(self, idx):
-        img_path, paper, name = self.samples[idx]
-        sample_idx = name[name.find("-O")+2:]
-        if "P" == name[0]:
-            meta = self.metadata.loc[self.names.index(name)].to_dict()
-            meta["Paper_idx"] = paper
+        name = self.samples[idx]
+        meta = self.metadata[name]
+        paper = str(meta["Paper Index"])
+        paper_path = os.path.join(self.root, paper)
+        if meta["Type"] == "Table":
+            img_path = os.path.join(paper_path, name+".png")
         else:
-            meta = {"Type": "Table", "Paper_idx": paper}
+            img_path = os.path.join(paper_path, name+"."+meta["Extension"])
+        
+        sample_idx = name[name.find("-O")+2:]
         gts = []
-        path = img_path[:img_path.rfind("/")]
-        files = sorted(os.listdir(path))
-        for file in files:
-            if not file.endswith(".csv"):
+        read_gt_files = []
+        if meta["Type"] in PLOT_TYPES:
+            gts.append(pd.read_csv(os.path.join(paper_path, name+".csv")))
+        else:
+            files = sorted(os.listdir(paper_path))
+            for file in files:
+                if not file.endswith(".csv"):
+                    continue
+                file_idx = file[file.find("-O")+2:file.rfind(".")]
+                if "-" in file_idx:
+                    file_idx = file_idx[:file_idx.find("-")]
+                if file_idx == sample_idx and name in file:
+                    if self.read_txt:
+                        with open(os.path.join(paper_path, file), "r") as f:
+                            gts.append(f.read())
+                    else:
+                        read_gt_files.append(file)
+                        gts.append(pd.read_csv(os.path.join(paper_path, file)))
+        return {"image_path": img_path, "gt": gts, "Paper Index": paper, "File name": name}
+
+def stratify_results(perf_per_sample, metadata, group_by, filters=None):
+    stratified_results = {}
+    for sample, perf in perf_per_sample.items():
+        meta = metadata[sample]
+        if filters is not None:
+            pass_filter = True
+            for filter in filters:
+                if meta[filter[0]] not in filter[1]:
+                    pass_filter = False
+                    break
+            if not pass_filter:
                 continue
-            file_idx = file[file.find("-O")+2:file.rfind(".")]
-            if "-" in file_idx:
-                file_idx = file_idx[:file_idx.find("-")]
-            if file_idx == sample_idx and name in file:
-                if self.read_txt:
-                    with open(os.path.join(path, file), "r") as f:
-                        gts.append(f.read())
-                else:
-                    gts.append(pd.read_csv(os.path.join(path, file)))
-        return {"image_path": img_path, "gt": gts, "metadata": meta}
+        key = []
+        for k in group_by:
+            key.append(meta[k])
+        if len(key) == 1:
+            key = key[0]
+            if isinstance(key, np.int64):
+                key = int(key)
+        else:
+            key = tuple(key)
+        if key not in stratified_results:
+            stratified_results[key] = []
+        stratified_results[key].append(perf)
+    results = {}
+    for key, perfs in stratified_results.items():
+        results[key] = merge_perf(perfs)
+    return results
 
 def main(args):
     if "gpt" in args.model.lower():
@@ -74,49 +108,40 @@ def main(args):
     elif "llava" in args.model.lower():
         mllm = LLAVA(args.model)
     
-    train_paper = ["2", "8", "10", "12", "14", "16", "20", "26", "32", "34", "38", "40", "41", "42", "43", "47", "49", "52", "55", "58", "61", "66", "68", "74", "86", "90", "92", "100"]
-    valid_paper = ["4", "6", "18", "22", "24", "28", "30", "36", "46", "48", "56", "62", "72", "84", "88", "94", "96", "100"]
-    dataset = Dataset(args.root, ["P"], valid_paper)
+    train_paper = [2, 8, 10, 12, 14, 16, 20, 26, 32, 34, 38, 40, 41, 42, 43, 47, 49, 52, 55, 58, 61, 66, 68, 74, 86, 90, 92, 100]
+    valid_paper = [4, 6, 18, 22, 24, 28, 30, 36, 46, 48, 56, 62, 72, 84, 88, 94, 96, 100]
+    dataset = Dataset(args.root, args.types, train_paper)
 
-    total_csv = [0, 0]
-    valid_csv = [0, 0]
-    invalid_format = [0, 0]
-    invalid_num = [0, 0]
-    invalid_col = [0, 0]
     perf_per_sample = {}
 
     for i in range(len(dataset)):
         data = dataset[i]
-        img_path, gts, meta = data["image_path"], data["gt"], data["metadata"]
-        file_name = meta["File_name"]
-        paper = meta["Paper_idx"]
+        img_path, gts, paper, file_name = data["image_path"], data["gt"], data["Paper Index"], data["File name"]
         if not os.path.exists(os.path.join(args.output, str(paper))):
             os.makedirs(os.path.join(args.output, str(paper)))
         perf = None
-        print("===================", file_name, meta["Type"], "===================")
-        if file_name[0] == "P":
-            idx = 0
-        else:
-            idx = 1
-        total_csv[idx] += 1
+        print("===================", file_name, "===================")
         for retry in range(MAX_RETRIES):
             print("***", retry+1, "trial ***")
             if args.eval_only:
                 res = []
-                results = os.listdir(args.output)
-                sample_idx = file_name[file_name.find("-O")+2:]
-                if "-" in sample_idx:
-                    sample_idx = sample_idx[:sample_idx.find("-")]
-                for paper_idx in results:
-                    if os.path.isdir(os.path.join(args.output, paper_idx)):
-                        files = os.listdir(os.path.join(args.output, paper_idx))
-                        for file in files:
-                            if file.endswith(".csv"):
-                                file_idx = file[file.find("-O")+2:file.rfind(".")]
-                                if "-" in file_idx:
-                                    file_idx = file_idx[:file_idx.find("-")]
-                                if file_idx == sample_idx and file_name in file:
-                                    res.append(pd.read_csv(os.path.join(args.output, paper_idx, file)))
+                read_res = []
+                results = os.listdir(os.path.join(args.output, str(paper)))
+                if file_name+".csv" in results:
+                    res.append(pd.read_csv(os.path.join(args.output, str(paper), file_name+".csv")))
+                    read_res.append(file_name+".csv")
+                else:
+                    cnt = 0
+                    while True:
+                        if f"{file_name}-{cnt}.csv" in results:
+                            res.append(pd.read_csv(os.path.join(args.output, str(paper), f"{file_name}-{cnt}.csv")))
+                            read_res.append(f"{file_name}-{cnt}.csv")
+                            cnt += 1
+                        else:
+                            break
+                if len(read_res) > 0:
+                    if len(read_res) > 1 or file_name+".csv" != read_res[0]:
+                        print("Reading", file_name, "from", read_res)
             else:
                 try:
                     response, res = mllm.query(baseline_prompt, img_path)
@@ -124,7 +149,6 @@ def main(args):
                         f.write(response)
                 except pd.errors.ParserError as e:
                     print(e)
-                    invalid_format[idx] += 1
                     continue
                 except Exception as e:
                     logging.error(RED + str(e) + RESET)
@@ -144,13 +168,8 @@ def main(args):
                     # print(GREEN + pair_trace + RESET)
                 else:
                     perf = evaluate_table(res, gts)
-                valid_csv[idx] += 1
                 break
             except (WrongCSVNumberError, FormatError) as e:
-                if type(e) == WrongCSVNumberError:
-                    invalid_num[idx] += 1
-                else:
-                    invalid_col[idx] += 1
                 logging.warning(e)
                 continue
             except Exception as e:
@@ -158,59 +177,44 @@ def main(args):
                 input("Press Enter to continue...")
                 continue
         if perf is not None:
-            if paper not in perf_per_sample:
-                perf_per_sample[paper] = {}
-            perf["Success retry"] = retry+1
-            perf_per_sample[paper][file_name] = perf
+            perf_per_sample[file_name] = perf
         print(file_name, "performance:", perf)
-    final_perfs = {}
-    perfs_per_paper = {}
-    plot_perfs, table_perfs = [], []
-    for paper in perf_per_sample:
-        plots, tables = [], []
-        for key in perf_per_sample[paper]:
-            if key[0] == "P":
-                plots.append(perf_per_sample[paper][key])
-            else:
-                tables.append(perf_per_sample[paper][key])
-        perfs_per_paper[paper] = {"plots": merge_perf(plots), "tables": merge_perf(tables)}
-        plot_perfs.append(perfs_per_paper[paper]["plots"])
-        table_perfs.append(perfs_per_paper[paper]["tables"])
-    final_perfs["plots"] = merge_perf(plot_perfs)
-    final_perfs["tables"] = merge_perf(table_perfs)
+    
+    perfs_per_paper = stratify_results(perf_per_sample, dataset.metadata, ["Paper Index"])
+    final_perfs = merge_perf([perfs_per_paper[paper] for paper in perfs_per_paper])
 
-    print("====================================\n")
-    if total_csv[0] > 0:
-        final_perfs["plots"]["Total"] = total_csv[0]
-        final_perfs["plots"]["Valid"] = valid_csv[0]
-        final_perfs["plots"]["Invalid CSV format"] = invalid_format[0]
-        final_perfs["plots"]["Invalid CSV number"] = invalid_num[0]
-        final_perfs["plots"]["Invalid column"] = invalid_col[0]
-        print(f"Plot: total {total_csv[0]}, valid {valid_csv[0]}, invalid format {invalid_format[0]}, invalid number {invalid_num[0]}, invalid column {invalid_col[0]}")
-        print("Final performance:", )
-        for key, value in final_perfs["plots"].items():
-            print("\t", key, ":", value)
-    if total_csv[1] > 0:
-        final_perfs["tables"]["Total"] = total_csv[1]
-        final_perfs["tables"]["Valid"] = valid_csv[1]
-        final_perfs["tables"]["Invalid CSV format"] = invalid_format[1]
-        final_perfs["tables"]["Invalid CSV number"] = invalid_num[1]
-        final_perfs["tables"]["Invalid column"] = invalid_col[1]
-        print(f"Table: total {total_csv[1]}, valid {valid_csv[1]}, invalid format {invalid_format[1]}, invalid number {invalid_num[1]}, invalid column {invalid_col[1]}")
-        print("Final performance:", final_perfs["tables"])
-    print("\n====================================")
+    stratified_results = {}
+    stratified_results["Type"] = stratify_results(perf_per_sample, dataset.metadata, ["Type"])
 
-    with open(os.path.join(args.output, "no-P-30-O2/perfs_dot.json"), "w") as f:
+    if any([t in args.types for t in PLOT_TYPES]):
+        stratified_results["# Subplot"] = stratify_results(perf_per_sample, dataset.metadata, ["# Subplot"], filters=[("Type", PLOT_TYPES)])
+        stratified_results["# Curve"] = stratify_results(perf_per_sample, dataset.metadata, ["# Curve"], filters=[("Type", PLOT_TYPES)])
+        stratified_results["Vector/Pixel"] = stratify_results(perf_per_sample, dataset.metadata, ["Vector/Pixel"], filters=[("Type", PLOT_TYPES)])
+        stratified_results["Axis"] = stratify_results(perf_per_sample, dataset.metadata, ["Axis"], filters=[("Type", PLOT_TYPES)])
+        stratified_results["# Data Points"] = stratify_results(perf_per_sample, dataset.metadata, ["# Data Points"], filters=[("Type", PLOT_TYPES)])
+    
+    if "Table" in args.types:
+        stratified_results["Rotate"] = stratify_results(perf_per_sample, dataset.metadata, ["Rotate"], filters=[("Type", ["Table"])])
+        stratified_results["# Panel"] = stratify_results(perf_per_sample, dataset.metadata, ["# Panel"], filters=[("Type", ["Table"])])
+        stratified_results["# Row"] = stratify_results(perf_per_sample, dataset.metadata, ["# Row"], filters=[("Type", ["Table"])])
+        stratified_results["# Column"] = stratify_results(perf_per_sample, dataset.metadata, ["# Column"], filters=[("Type", ["Table"])])
+
+    print("================= Final Performance =================")
+    print(final_perfs)
+    print("=====================================================")
+
+    with open(os.path.join(args.output, "perfs.json"), "w") as f:
         json.dump(final_perfs, f, indent=4)
-    with open(os.path.join(args.output, "no-P-30-O2/perfs_per_paper_dot.json"), "w") as f:
-        json.dump(perfs_per_paper, f, indent=4)
-    with open(os.path.join(args.output, "no-P-30-O2/perf_per_sample_dot.json"), "w") as f:
+    with open(os.path.join(args.output, "perfs_stratified.json"), "w") as f:
+        json.dump(stratified_results, f, indent=4)
+    with open(os.path.join(args.output, "perf_per_sample.json"), "w") as f:
         json.dump(perf_per_sample, f, indent=4)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Digitize a plot or a table from an image')
     parser.add_argument('--root', type=str, help='Path to the image file')
     parser.add_argument("--output", type=str, help="Path to the output CSV file")
+    parser.add_argument('--types', type=str, nargs="+", help='Types of data to digitize', default=PLOT_TYPES+["Table"])
     parser.add_argument('--api', type=str, help='OpenAI API key')
     parser.add_argument('--org', type=str, help='OpenAI organization')
     parser.add_argument('--model', type=str)
