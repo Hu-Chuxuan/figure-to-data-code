@@ -7,7 +7,7 @@ from Exceptions import WrongCSVNumberError, FormatError, YELLOW, BLUE, MAGENTA, 
 from TableEvaluator import parse_range
 
 USE_MASE = False
-DEBUG = False
+DEBUG = True
 
 '''
 Potential types of outputs: float, ndarray, str, None
@@ -526,7 +526,7 @@ def evaluate_plot(pred_df, gt_df, plot_type):
                 curves.append({"pred": pred_curve, "gt": gt_curve, "gt_len": len(gt_curve), "pred_len": len(pred_curve)})
                 continue
             gt_x = gt_curve.get_clean_attr("x")
-            if plot_type == "Continuous":
+            if plot_type == "Continuous" or (plot_type == "Combo" and len(gt_curve) > 100):
                 # This is a continuous plot
                 x_common = np.linspace(
                     min(min(pred_curve.x), min(gt_curve.x)), 
@@ -571,3 +571,9 @@ def evaluate_plot(pred_df, gt_df, plot_type):
     else:
         perf["Curve recall"] = paired_curve_num / pred_num
     return perf
+
+if __name__ == "__main__":
+    pred_df = [pd.read_csv("Baseline/4o-full/19/P-19-O4.csv")]
+    gt_df = [pd.read_csv("/Users/zhangliyun/Documents/UIUC/figure/figure-to-data/19/P-19-O4.csv")]
+    perf = evaluate_plot(pred_df, gt_df, "Dot")
+    print(perf)
