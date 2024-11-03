@@ -10,6 +10,7 @@ If the picture contains a table,
     4. If a cell contains a statistic significance marker, you should remain the marker as it is. DO NOT convert the statistic significance to p-values. The marker should be attached in the same cell as the statistic it refers to.
     5. For all special characters, you should represent them as the LaTeX notation. You MUST NOT separate the statistic significance marker with the coefficients. For the control variable checkmark, you should use 1 to represent the selected controls and 0 to represent the unselected controls. The control variable checkmark might be in different formats, for example "Yes", "\checkmark", "X", etc. You should convert all of them to 0/1.
     6. You MUST reserve the structure of the table in the image, which means that you CANNOT transpose the table or rearrange the orders. You can only split the table into multiple CSV files if there are multiple different headers. If there are multiple panels sharing the same header, DO NOT split them. 
+    7. For cells without values, you should leave it as empty in the generated CSVs as well.
 
 If the picture contains a plot, 
     1. Your output should follow the following format:
