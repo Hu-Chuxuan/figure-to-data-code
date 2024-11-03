@@ -65,7 +65,7 @@ class Dataset:
                     else:
                         read_gt_files.append(file)
                         gts.append(pd.read_csv(os.path.join(paper_path, file)))
-        return {"image_path": img_path, "gt": gts, "Paper Index": paper, "File name": name}
+        return {"image_path": img_path, "gt": gts, "Paper Index": paper, "File name": name, "Type": meta["Type"]}
 
 def stratify_results(perf_per_sample, metadata, group_by, filters=None):
     stratified_results = {}
@@ -110,7 +110,7 @@ def main(args):
     
     train_paper = [2, 8, 10, 12, 14, 16, 20, 26, 32, 34, 38, 40, 41, 42, 43, 47, 49, 52, 55, 58, 61, 66, 68, 74, 86, 90, 92, 100]
     valid_paper = [4, 6, 18, 22, 24, 28, 30, 36, 46, 48, 56, 62, 72, 84, 88, 94, 96, 100]
-    dataset = Dataset(args.root, args.types, train_paper)
+    dataset = Dataset(args.root, args.types)
 
     perf_per_sample = {}
 
@@ -163,8 +163,8 @@ def main(args):
                         df.to_csv(os.path.join(args.output, str(paper), f"{file_name}-{i}.csv"), index=False)
             
             try:
-                if file_name[0] == "P":
-                    perf = evaluate_plot(res, gts)
+                if data["Type"] in PLOT_TYPES:
+                    perf = evaluate_plot(res, gts, data["Type"])
                     # print(GREEN + pair_trace + RESET)
                 else:
                     perf = evaluate_table(res, gts)

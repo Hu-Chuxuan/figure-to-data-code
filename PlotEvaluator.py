@@ -492,7 +492,7 @@ def cal_metrics(pred_values, gt_values, scale, mean):
     WrongCSVNumberError: the number of predicted CSV files is different from the number of ground truth CSV files
     FormatError: the predicted CSV file has an invalid column (valid columns are "Value", "Subplot Value", and "Type-{}")
 '''
-def evaluate_plot(pred_df, gt_df):
+def evaluate_plot(pred_df, gt_df, plot_type):
     if len(pred_df) == 1 and len(gt_df) == 1:
         pred_df = pred_df[0]
         gt_df = gt_df[0]
@@ -526,7 +526,7 @@ def evaluate_plot(pred_df, gt_df):
                 curves.append({"pred": pred_curve, "gt": gt_curve, "gt_len": len(gt_curve), "pred_len": len(pred_curve)})
                 continue
             gt_x = gt_curve.get_clean_attr("x")
-            if len(gt_curve.x) >= 50 and gt_x is not None and len(gt_x) >= 50:
+            if plot_type == "Continuous":
                 # This is a continuous plot
                 x_common = np.linspace(
                     min(min(pred_curve.x), min(gt_curve.x)), 
