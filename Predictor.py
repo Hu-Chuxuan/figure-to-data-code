@@ -97,7 +97,11 @@ def stratify_results(perf_per_sample, metadata, group_by, filters=None):
     return results
 
 def main(args):
-    if "gpt" in args.model.lower():
+    if args.model is None:
+        mllm = None
+        if not args.eval_only:
+            raise ValueError("Model is required for evaluation")
+    elif "gpt" in args.model.lower():
         mllm = GPT(args.api, args.org, args.model)
     elif "claude" in args.model.lower():
         mllm = Claude(args.api, args.org, args.model)
@@ -108,9 +112,7 @@ def main(args):
     elif "llava" in args.model.lower():
         mllm = LLAVA(args.model)
     
-    train_paper = [2, 8, 10, 12, 14, 16, 20, 26, 32, 34, 38, 40, 41, 42, 43, 47, 49, 52, 55, 58, 61, 66, 68, 74, 86, 90, 92, 100]
-    valid_paper = [4, 6, 18, 22, 24, 28, 30, 36, 46, 48, 56, 62, 72, 84, 88, 94, 96, 100]
-    dataset = Dataset(args.root, args.types)
+    dataset = Dataset(args.root, args.types, args.paper_list)
 
     perf_per_sample = {}
 
@@ -212,13 +214,14 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Digitize a plot or a table from an image')
-    parser.add_argument('--root', type=str, help='Path to the image file')
-    parser.add_argument("--output", type=str, help="Path to the output CSV file")
+    parser.add_argument('--root', type=str, help='Path to the image file', required=True)
+    parser.add_argument("--output", type=str, help="Path to the output CSV file", default="output")
     parser.add_argument('--types', type=str, nargs="+", help='Types of data to digitize', default=PLOT_TYPES+["Table"])
     parser.add_argument('--api', type=str, help='OpenAI API key')
     parser.add_argument('--org', type=str, help='OpenAI organization')
     parser.add_argument('--model', type=str)
     parser.add_argument('--eval_only', action="store_true")
+    parser.add_argument('--paper_list', type=str, nargs="*", help='List of paper indices')
     args = parser.parse_args()
 
     main(args)

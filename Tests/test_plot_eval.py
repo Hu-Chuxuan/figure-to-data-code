@@ -600,7 +600,7 @@ class TestPlotEvaluatorPairing(TestPlotEvaluator):
         # histogram + multiple panels + no type-2
         pred = pd.read_csv("Tests/evaluator/P-14-O2_pred.csv")
         gt = pd.read_csv("Tests/evaluator/P-14-O2_gt.csv")
-        perf = evaluate_plot([pred], [gt])
+        perf = evaluate_plot([pred], [gt], "Dot")
 
         pred_x = [(1995, 1996), (1997, 1998), (1999, 2000), (2001, 2002), (2003, 2004), (2005, 2006), (2007, 2008), (2009, 2010), (2011, 2012), (2013, 2014)]
         pred_value = [0.05, 0.03, 0.15, 0.08, 0.22, 0.07, 0.13, 0.06, 0.04, 0.02]
@@ -616,7 +616,7 @@ class TestPlotEvaluatorGeneral(TestPlotEvaluator):
         # dot plot + error bars + multiple curves 
         pred = pd.read_csv("Tests/evaluator/P-2-O1_pred.csv")
         gt = pd.read_csv("Tests/evaluator/P-2-O1_gt.csv")
-        perf = evaluate_plot([pred], [gt])
+        perf = evaluate_plot([pred], [gt], "Dot")
 
         pred_value = [[-0.15, -0.05, 0.1], [-0.1, 0.0, 0.05]]
         pred_err = [[0.1, 0.12, 0.09], [0.08, 0.07, 0.06]]
@@ -656,7 +656,7 @@ class TestPlotEvaluatorGeneral(TestPlotEvaluator):
         # histogram with Type-1 being range + no subplot value + no type-2
         pred = pd.read_csv("Tests/evaluator/P-10-O1_pred.csv")
         gt = pd.read_csv("Tests/evaluator/P-10-O1_gt.csv")
-        perf = evaluate_plot([pred], [gt])
+        perf = evaluate_plot([pred], [gt], "Dot")
         
         pred_x = [(0.0, 0.1), (0.1, 0.2), (0.2, 0.3), (0.3, 0.4), (0.4, 0.5), (0.5, 0.6), (0.6, 0.7), (0.7, 0.8), (0.8, 0.9), (0.9, 1.0)]
         pred_value = [75, 75, 85, 95, 80, 20, 5, 0, 5, 5]
@@ -682,7 +682,7 @@ class TestPlotEvaluatorGeneral(TestPlotEvaluator):
         # continuous plot + multiple curves + no subplot valuez
         pred = pd.read_csv("Tests/evaluator/P-20-O1_pred.csv")
         gt = pd.read_csv("Tests/evaluator/P-20-O1_gt.csv")
-        perf = evaluate_plot([pred], [gt])
+        perf = evaluate_plot([pred], [gt], "Continuous")
         
         pred_x, pred_y = [[], []], [[], []]
         for i in range(len(pred)):
@@ -728,7 +728,7 @@ class TestPlotEvaluatorGeneral(TestPlotEvaluator):
         # ground truth has more data then prediction 
         pred = pd.read_csv("Tests/evaluator/P-14-O1_pred.csv")
         gt = pd.read_csv("Tests/evaluator/P-14-O1_gt.csv")
-        perf = evaluate_plot([pred], [gt])
+        perf = evaluate_plot([pred], [gt], "Dot")
         
         x_scales = [np.max(gt["Type-1"][:18]) - np.min(gt["Type-1"][:18]), np.max(gt["Type-1"][18:]) - np.min(gt["Type-1"][18:])]
         x_means = [np.mean(gt["Type-1"][:18]), np.mean(gt["Type-1"][18:])]
@@ -767,7 +767,7 @@ class TestPlotEvaluatorGeneral(TestPlotEvaluator):
         # prediction has more data then ground truth + Type-1 need estimation
         pred = pd.read_csv("Tests/evaluator/P-47-O3_pred.csv")
         gt = pd.read_csv("Tests/evaluator/P-47-O3_gt.csv")
-        perf = evaluate_plot([pred], [gt])
+        perf = evaluate_plot([pred], [gt], "Dot")
 
         pred_x = [30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85]
         pred_value = [1.0, 1.1, 1.2, 1.3, 1.2, 1.1, 1.0, 0.8, 0.6, 0.5, 0.4, 0.3]
@@ -793,7 +793,7 @@ class TestPlotEvaluatorGeneral(TestPlotEvaluator):
         # Type-1 and subplot value are float 
         pred = pd.read_csv("Tests/evaluator/P-49-O6_pred.csv")
         gt = pd.read_csv("Tests/evaluator/P-49-O6_gt.csv")
-        perf = evaluate_plot([pred], [gt])
+        perf = evaluate_plot([pred], [gt], "Dot")
         
         pred_x = [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]]
         pred_v = [
@@ -838,7 +838,7 @@ class TestPlotEvaluatorGeneral(TestPlotEvaluator):
     def test_missing_curve(self):
         pred = pd.read_csv("Tests/evaluator/P-2-O1_pred_missing_curve.csv")
         gt = pd.read_csv("Tests/evaluator/P-2-O1_gt.csv")
-        perf = evaluate_plot([pred], [gt])
+        perf = evaluate_plot([pred], [gt], "Dot")
 
         pred_value = [[-0.15, -0.05, 0.1]]
         pred_err = [[0.1, 0.12, 0.09]]
@@ -869,7 +869,7 @@ class TestPlotEvaluatorGeneral(TestPlotEvaluator):
     def test_extra_curve(self):
         pred = pd.read_csv("Tests/evaluator/P-2-O1_pred_extra_curve.csv")
         gt = pd.read_csv("Tests/evaluator/P-2-O1_gt.csv")
-        perf = evaluate_plot([pred], [gt])
+        perf = evaluate_plot([pred], [gt], "Dot")
 
         pred_value = [[-0.15, -0.05, 0.1], [-0.1, 0.0, 0.05]]
         pred_err = [[0.1, 0.12, 0.09], [0.08, 0.07, 0.06]]
@@ -911,7 +911,7 @@ class TestPlotEvaluatorGeneral(TestPlotEvaluator):
     def test_missing_subplot(self):
         pred = pd.read_csv("Tests/evaluator/P-49-O6_pred_missing_subplot.csv")
         gt = pd.read_csv("Tests/evaluator/P-49-O6_gt.csv")
-        perf = evaluate_plot([pred], [gt])
+        perf = evaluate_plot([pred], [gt], "Dot")
 
         pred_x = [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]]
         pred_v = [
@@ -952,7 +952,7 @@ class TestPlotEvaluatorGeneral(TestPlotEvaluator):
     def test_extra_subplot(self):
         pred = pd.read_csv("Tests/evaluator/P-49-O6_pred_extra_subplot.csv")
         gt = pd.read_csv("Tests/evaluator/P-49-O6_gt.csv")
-        perf = evaluate_plot([pred], [gt])
+        perf = evaluate_plot([pred], [gt], "Dot")
 
         pred_x = [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]]
         pred_v = [
@@ -1005,7 +1005,7 @@ class TestPlotEvaluatorGeneral(TestPlotEvaluator):
     def test_pred_missing_err(self):
         pred = [pd.read_csv("Tests/evaluator/P-41-O2_pred.csv")]
         gt = [pd.read_csv("Tests/evaluator/P-41-O2_gt.csv")]
-        perf = evaluate_plot(pred, gt)
+        perf = evaluate_plot(pred, gt, "Dot")
 
         pred_value = [[0.13, 0.15, 0.18, 0.9, 0.12, 0.11], [0.35, 0.32, 0.3, 0.28, 0.27, 0.29]]
         gt_value = [[0.1005324813631522, 0.134185303514377, 0.1631522896698615, 0.1005324813631522, 0.1478168264110756, 0.1226837060702875], [0.3608093716719915, 0.3135250266240681, 0.2696485623003194, 0.2636847710330138, 0.3020234291799787, 0.2879659211927582]]
@@ -1037,12 +1037,12 @@ class TestPlotEvaluatorGeneral(TestPlotEvaluator):
     def test_err_zero(self):
         pred = [pd.read_csv("Tests/evaluator/P-41-O5_pred.csv")]
         gt = [pd.read_csv("Tests/evaluator/P-41-O5_gt.csv")]
-        perf = evaluate_plot(pred, gt)
+        perf = evaluate_plot(pred, gt, "Dot")
     
     def test_partial_range(self):
         pred = [pd.read_csv("Tests/evaluator/P-92-O6_pred.csv")]
         gt = [pd.read_csv("Tests/evaluator/P-92-O6_gt.csv")]
-        perf = evaluate_plot(pred, gt)
+        perf = evaluate_plot(pred, gt, "Dot")
 
         pred_x = [[0, (1.0, 5.0), (6.0, 10.0), (11.0, 15.0), (16.0, 20.0), (21.0, 30.0), (31.0, 40.0), ">40"], [(0.0, 10.0), (11.0, 20.0), (21.0, 30.0), (31.0, 40.0), (41.0, 50.0), (51.0, 60.0), ">60"]]
         pred_y = [[0.05, 0.1, 0.275, 0.25, 0.15, 0.125, 0.05, 0.025], [0.225, 0.2, 0.175, 0.15, 0.125, 0.075, 0.05]]
@@ -1072,7 +1072,7 @@ class TestPlotEvaluatorGeneral(TestPlotEvaluator):
     def test_multi_err_bar(self):
         pred = [pd.read_csv("Tests/evaluator/P-74-O3_pred.csv")]
         gt = [pd.read_csv("Tests/evaluator/P-74-O3_gt.csv")]
-        perf = evaluate_plot(pred, gt)
+        perf = evaluate_plot(pred, gt, "Dot")
 
         pred_value = [0.2, 0.0, 0.1, 0.5]
         pred_err = [[0.15, 0.1, 0.2, 0.1], [0.2, 0.12, 0.23, 0.17]]
@@ -1106,14 +1106,14 @@ class TestPlotEvaluatorGeneral(TestPlotEvaluator):
         self.assertSameDict(perf, gen_ans())
 
         pred = [pd.read_csv("Tests/evaluator/P-74-O3_pred_missing_err.csv")]
-        perf = evaluate_plot(pred, gt)
+        perf = evaluate_plot(pred, gt, "Dot")
         pred_err = [[0.2, 0.1, 0.2, 0.1], [0.2, 0.1, 0.2, 0.1]]
         pred_err_flat = np.array(pred_err[0] + pred_err[1])
         self.assertSameDict(perf, gen_ans())
 
         gt = [pd.read_csv("Tests/evaluator/P-74-O3_pred_missing_err.csv")]
         pred = [pd.read_csv("Tests/evaluator/P-74-O3_gt.csv")]
-        perf = evaluate_plot(pred, gt)
+        perf = evaluate_plot(pred, gt, "Dot")
         pred_value, gt_value = gt_value, pred_value
         pred_err, gt_err = gt_err, pred_err
         pred_err_flat, gt_err_flat = gt_err_flat, pred_err_flat
@@ -1124,7 +1124,7 @@ class TestPlotEvaluatorGeneral(TestPlotEvaluator):
     def test_y_err_str(self):
         pred = [pd.read_csv("Tests/evaluator/P-2-O1_pred_y_err_str.csv")]
         gt = [pd.read_csv("Tests/evaluator/P-2-O1_gt.csv")]
-        perf = evaluate_plot(pred, gt)
+        perf = evaluate_plot(pred, gt, "Dot")
 
         pred_value = [[-0.15, -0.05, 0.1], [0.05]]
         gt_value = [[-0.19574036511156184, -0.06186612576064909, 0.07403651115618659], [-0.36004056795131845, -0.13691683569979718, 0.08012170385395534]]
