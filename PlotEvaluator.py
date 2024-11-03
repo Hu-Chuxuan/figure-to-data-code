@@ -136,8 +136,15 @@ class Curve:
         y = interp1d(self.x, self.y, kind="cubic", fill_value="extrapolate")
         self.y = y(x_common)
         if self.err is not None:
-            err = interp1d(self.x, self.err, kind="cubic", fill_value="extrapolate")
-            self.err = err(x_common)
+            if len(self.err.shape) == 1:
+                err = interp1d(self.x, self.err, kind="cubic", fill_value="extrapolate")
+                self.err = err(x_common)
+            else:
+                err = [
+                    interp1d(self.x, self.err[:, i], kind="cubic", fill_value="extrapolate")
+                    for i in range(self.err.shape[1])
+                ]
+                self.err = np.array([err[i](x_common) for i in range(len(err))]).T
         self.x = None
 
 def cost_fn(pred, gt):
@@ -153,15 +160,14 @@ def str_cost_fn(pred, gt):
     gt = gt.strip().lower()
     if pred == gt:
         return 0
-    if len(pred) <= len(gt) and gt.endswith(pred):
-        return len(gt) - len(pred)
-    if len(gt) <= len(pred) and pred.endswith(gt):
-        return len(pred) - len(gt)
+    
     # remove puctuations with 0.5 cost each chacacter
+    allow_remove_alpha = True
     pred_ptr, gt_ptr = 0, 0
     cost = 0
     while pred_ptr < len(pred) or gt_ptr < len(gt):
         if pred_ptr < len(pred) and gt_ptr < len(gt) and pred[pred_ptr] == gt[gt_ptr]:
+            allow_remove_alpha = False
             pred_ptr += 1
             gt_ptr += 1
         elif pred_ptr < len(pred) and not pred[pred_ptr].isalpha() and not pred[pred_ptr].isdigit():
@@ -170,6 +176,12 @@ def str_cost_fn(pred, gt):
         elif gt_ptr < len(gt) and not gt[gt_ptr].isalpha() and not gt[gt_ptr].isdigit():
             gt_ptr += 1
             cost += 0.5
+        elif allow_remove_alpha and pred_ptr < len(pred) and gt_ptr < len(gt):
+            if len(pred) < len(gt):
+                gt_ptr += 1
+            else:
+                pred_ptr += 1
+            cost += 1
         else:
             return np.inf
     return cost
@@ -313,26 +325,30 @@ def pair_curves(pred_curves, gt_curves):
 
     paired_curves = {}
     paired_subplots = {}
-    for subplot_gt in gt_curves.keys():
-        best_score = np.inf
-        best_subplot_pred = None
-        for subplot_pred in pred_curves.keys():
-            if subplot_pred in paired_subplots:
-                continue
-            score = pair_score(subplot_pred, subplot_gt)
-            if score < best_score:
-                best_score = score
-                best_subplot_pred = subplot_pred
-        if best_score < np.inf:
-            paired_subplots[best_subplot_pred] = subplot_gt
-        else:
-            if subplot_gt not in unpaired_gt_subplot:
-                unpaired_gt_subplot.append(subplot_gt)
-            paired_curves[subplot_gt] = []
-            for type2_gt in gt_curves[subplot_gt].keys():
-                gt_curve = gt_curves[subplot_gt][type2_gt]
-                pred_curve = {}
-                paired_curves[subplot_gt].append((Curve(pred_curve), Curve(gt_curve)))
+
+    if len(gt_curves) == 1 and len(pred_curves) == 1:
+        paired_subplots[list(pred_curves.keys())[0]] = list(gt_curves.keys())[0]
+    else:
+        for subplot_gt in gt_curves.keys():
+            best_score = np.inf
+            best_subplot_pred = None
+            for subplot_pred in pred_curves.keys():
+                if subplot_pred in paired_subplots:
+                    continue
+                score = pair_score(subplot_pred, subplot_gt)
+                if score < best_score:
+                    best_score = score
+                    best_subplot_pred = subplot_pred
+            if best_score < np.inf:
+                paired_subplots[best_subplot_pred] = subplot_gt
+            else:
+                if subplot_gt not in unpaired_gt_subplot:
+                    unpaired_gt_subplot.append(subplot_gt)
+                paired_curves[subplot_gt] = []
+                for type2_gt in gt_curves[subplot_gt].keys():
+                    gt_curve = gt_curves[subplot_gt][type2_gt]
+                    pred_curve = {}
+                    paired_curves[subplot_gt].append((Curve(pred_curve), Curve(gt_curve)))
     
     for subplot_pred in pred_curves.keys():
         if subplot_pred not in paired_subplots:
@@ -571,9 +587,3 @@ def evaluate_plot(pred_df, gt_df, plot_type):
     else:
         perf["Curve recall"] = paired_curve_num / pred_num
     return perf
-
-if __name__ == "__main__":
-    pred_df = [pd.read_csv("Baseline/4o-full/19/P-19-O4.csv")]
-    gt_df = [pd.read_csv("/Users/zhangliyun/Documents/UIUC/figure/figure-to-data/19/P-19-O4.csv")]
-    perf = evaluate_plot(pred_df, gt_df, "Dot")
-    print(perf)
