@@ -105,14 +105,14 @@ def main(args):
         mllm = GPT(args.api, args.org, args.model)
     elif "claude" in args.model.lower():
         mllm = Claude(args.api, args.org, args.model)
-    elif "qwen" in args.model.lower():
-        mllm = Qwen(args.model)
-    elif "molmo" in args.model.lower():
-        mllm = Molmo(args.model)
     elif "llava" in args.model.lower():
         mllm = LLAVA(args.model)
+    elif "molmo" in args.model.lower():
+        mllm = Molmo(args.model)
     elif "internvl" in args.model.lower():
         mllm = InternVL(args.model)
+    elif "qwen" in args.model.lower():
+        mllm = Qwen(args.model)
     
     dataset = Dataset(args.root, args.types, args.paper_list)
 
