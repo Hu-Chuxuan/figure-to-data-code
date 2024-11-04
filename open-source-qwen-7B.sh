@@ -15,4 +15,4 @@ echo "CUDA availability in PyTorch:"
 python -c "import torch; print('CUDA available:', torch.cuda.is_available())"
 
 mkdir ../output/Qwen-7B
-python Predictor.py --root ../figure-to-data --output ../output/Qwen-7B --model Qwen/Qwen2-VL-7B-Instruct --paper_list 1
+python Predictor.py --root ../figure-to-data --output ../output/Qwen-7B --model Qwen/Qwen2-VL-7B-Instruct --paper_list 1 2 3
