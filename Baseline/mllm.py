@@ -194,10 +194,10 @@ class Molmo:
 
         # generate output; maximum 200 new tokens; stop generation when <|endoftext|> is generated
         with torch.autocast(device_type="cuda", enabled=True, dtype=torch.bfloat16):
-            output = model.generate_from_batch(
+            output = self.model.generate_from_batch(
                 inputs,
                 GenerationConfig(max_new_tokens=200, stop_strings="<|endoftext|>"),
-                tokenizer=processor.tokenizer
+                tokenizer=self.processor.tokenizer
             )
 
         # only get generated tokens; decode them to text
