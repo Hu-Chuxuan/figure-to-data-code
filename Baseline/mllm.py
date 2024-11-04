@@ -128,15 +128,16 @@ class Qwen:
         self.processor = AutoProcessor.from_pretrained(model)
 
     def query(self, prompt, image_path):
+        prompt = "who are you"
         messages = [
             {
                 "role": "user",
                 "content": [
                     {"type": "text", "text": prompt},
-                    {
-                        "type": "image",
-                        "image": image_path,
-                    },
+                    # {
+                    #     "type": "image",
+                    #     "image": image_path,
+                    # },
                 ],
             }
         ]
@@ -166,7 +167,7 @@ class Qwen:
 
         print(output_text)
 
-        return output_text, parse_response(output_text)
+        # return output_text, parse_response(output_text)
 
 class Molmo:
     def __init__(self, model='allenai/Molmo-72B-0924'):
