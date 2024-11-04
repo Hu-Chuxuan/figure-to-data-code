@@ -8,7 +8,7 @@
 #SBATCH --gres=gpu:H100:1
 #SBATCH --nodelist=ccc0419
 #SBATCH --time=00:10:00
-#SBATCH --mem=200G
+#SBATCH --mem=1G
 
 echo "Checking GPU availability..."
 nvidia-smi
