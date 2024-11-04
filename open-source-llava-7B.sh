@@ -15,4 +15,4 @@ echo "CUDA availability in PyTorch:"
 python -c "import torch; print('CUDA available:', torch.cuda.is_available())"
 
 mkdir ../output/Llava-7B
-python Predictor.py --root ../figure-to-data --output ../output/Llava-7B --model lmms-lab/llava-onevision-qwen2-7b-ov --paper_list 1 2 3
+python Predictor.py --root ../figure-to-data --output ../output/Llava-7B --model lmms-lab/llava-onevision-qwen2-7b-ov --paper_list 1 2 3 --types Table

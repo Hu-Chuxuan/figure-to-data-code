@@ -30,7 +30,7 @@ class Dataset:
             if meta["Type"] in types:
                 if paper_list is None or meta["Paper Index"] in paper_list:
                     self.samples.append(sample)
-        logging.warning("Number of samples:", len(self.samples))
+        logging.warning("Number of samples: " + str(len(self.samples)))
     
     def __len__(self):
         return len(self.samples)
@@ -124,9 +124,9 @@ def main(args):
         if not os.path.exists(os.path.join(args.output, str(paper))):
             os.makedirs(os.path.join(args.output, str(paper)))
         perf = None
-        logging.warning("===================", file_name, "===================")
+        logging.warning("===================" + file_name + "===================")
         for retry in range(MAX_RETRIES):
-            logging.warning("***", retry+1, "trial ***")
+            logging.warning("***"+str(retry+1)+"trial ***")
             if args.eval_only:
                 res = []
                 read_res = []
@@ -145,7 +145,7 @@ def main(args):
                             break
                 if len(read_res) > 0:
                     if len(read_res) > 1 or file_name+".csv" != read_res[0]:
-                        logging.warning("Reading", file_name, "from", read_res)
+                        logging.warning("Reading " + file_name + " from ", read_res)
             else:
                 res = None
                 try:
@@ -198,7 +198,7 @@ def main(args):
                 logging.warning(perf)
                 # input("Press Enter to continue...")
             perf_per_sample[file_name] = perf
-        logging.warning(file_name, "performance:", perf)
+        logging.warning(file_name + " performance: " + str(perf))
     
     perfs_per_paper = stratify_results(perf_per_sample, dataset.metadata, ["Paper Index"])
     final_perfs = merge_perf([perfs_per_paper[paper] for paper in perfs_per_paper])
@@ -220,7 +220,7 @@ def main(args):
         stratified_results["# Column"] = stratify_results(perf_per_sample, dataset.metadata, ["# Column"], filters=[("Type", ["Table"])])
 
     logging.warning("================= Final Performance =================")
-    logging.warning(final_perfs)
+    logging.warning(str(final_perfs))
     logging.warning("=====================================================")
 
     with open(os.path.join(args.output, "perfs.json"), "w") as f:
