@@ -219,8 +219,10 @@ class Molmo:
 class LLAVA:
     def __init__(self, model):
         model_name = "llava_qwen"
+        # self.tokenizer, self.model, self.image_processor, self.max_length = load_pretrained_model(
+        #         model, None, model_name, device_map="auto")
         self.tokenizer, self.model, self.image_processor, self.max_length = load_pretrained_model(
-                model, None, model_name, device_map="auto")
+                model, None, model_name, device_map="cpu")
         self.model.eval()
 
     def query(self, prompt, image_path):
