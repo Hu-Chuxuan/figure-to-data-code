@@ -154,11 +154,11 @@ def main(args):
                         f.write(response)
                 except pd.errors.ParserError as e:
                     print(e)
-                    perf = {"ParserError": 1, "Success": 0}
+                    perf = {"ParserError": 1, "Success": 0, "WrongCSVNumberError": 0, "FormatError": 0, "Other exception": 0}
                     continue
                 except Exception as e:
                     logging.error(RED + str(e) + RESET)
-                    perf = {"Other exception": 1, "Success": 0}
+                    perf = {"Other exception": 1, "Success": 0, "ParserError": 0, "WrongCSVNumberError": 0, "FormatError": 0}
                     # input("Press Enter to continue...")
             
                 if res == None:
