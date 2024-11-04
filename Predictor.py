@@ -7,7 +7,7 @@ import json
 import pickle as pkl
 import numpy as np
 
-from Baseline.mllm import GPT, Claude, Qwen, Molmo, LLAVA
+from Baseline.mllm import GPT, Claude, Qwen, Molmo, LLAVA, InternVL
 from Baseline.baseline import baseline_prompt
 from PlotEvaluator import evaluate_plot, merge_perf, WrongCSVNumberError, FormatError
 from TableEvaluator import evaluate_table
@@ -111,6 +111,8 @@ def main(args):
         mllm = Molmo(args.model)
     elif "llava" in args.model.lower():
         mllm = LLAVA(args.model)
+    elif "internvl" in args.model.lower():
+        mllm = InternVL(args.model)
     
     dataset = Dataset(args.root, args.types, args.paper_list)
 
