@@ -6,7 +6,7 @@
 #SBATCH --partition=secondary
 #SBATCH --ntasks-per-node=3
 #SBATCH --gres=gpu:H100:1
-#SBATCH --time=00:20:00
+#SBATCH --time=00:50:00
 #SBATCH --mem=21G
 
 echo "Checking GPU availability..."
