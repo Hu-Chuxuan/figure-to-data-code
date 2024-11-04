@@ -226,7 +226,7 @@ class LLAVA:
     def query(self, prompt, image_path):
         image = Image.open(image_path)
         image_tensor = process_images([image], self.image_processor, self.model.config)
-        image_tensor = [_image.to(dtype=torch.float16, device='cuda') for _image in image_tensor]
+        image_tensor = [_image.to(dtype=torch.float16, device='auto') for _image in image_tensor]
 
         conv_template = "qwen_2"  # Make sure you use correct chat template for different models
         question = DEFAULT_IMAGE_TOKEN + "\n" + prompt
@@ -235,7 +235,8 @@ class LLAVA:
         conv.append_message(conv.roles[1], None)
         prompt_question = conv.get_prompt()
 
-        input_ids = tokenizer_image_token(prompt_question, self.tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt").unsqueeze(0).to("cuda")
+        # input_ids = tokenizer_image_token(prompt_question, self.tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt").unsqueeze(0).to("cuda")
+        input_ids = tokenizer_image_token(prompt_question, self.tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt").unsqueeze(0)
         image_sizes = [image.size]
 
         cont = self.model.generate(
