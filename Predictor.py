@@ -236,7 +236,7 @@ if __name__ == "__main__":
     parser.add_argument('--org', type=str, help='OpenAI organization')
     parser.add_argument('--model', type=str)
     parser.add_argument('--eval_only', action="store_true")
-    parser.add_argument('--paper_list', type=str, nargs="*", help='List of paper indices')
+    parser.add_argument('--paper_list', type=int, nargs="*", help='List of paper indices')
     args = parser.parse_args()
 
     main(args)
