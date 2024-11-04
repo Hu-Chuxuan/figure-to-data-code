@@ -7,7 +7,7 @@
 #SBATCH --ntasks-per-node=3
 #SBATCH --gres=gpu:H100:1
 #SBATCH --nodelist=ccc0419
-#SBATCH --time=1-00:00:00
+#SBATCH --time=00:10:00
 #SBATCH --mem=200G
 
 echo "Checking GPU availability..."
