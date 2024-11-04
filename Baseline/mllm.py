@@ -128,7 +128,6 @@ class Qwen:
         self.processor = AutoProcessor.from_pretrained(model)
 
     def query(self, prompt, image_path):
-        prompt = "who are you"
         messages = [
             {
                 "role": "user",
