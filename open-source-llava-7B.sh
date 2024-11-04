@@ -6,9 +6,8 @@
 #SBATCH --partition=ddkang
 #SBATCH --ntasks-per-node=3
 #SBATCH --gres=gpu:H100:1
-#SBATCH --nodelist=ccc0419
-#SBATCH --time=10:00:00
-#SBATCH --mem=50G
+#SBATCH --time=00:20:00
+#SBATCH --mem=40G
 
 echo "Checking GPU availability..."
 nvidia-smi

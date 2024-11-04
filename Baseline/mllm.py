@@ -219,10 +219,10 @@ class Molmo:
 class LLAVA:
     def __init__(self, model):
         model_name = "llava_qwen"
+        self.tokenizer, self.model, self.image_processor, self.max_length = load_pretrained_model(
+                model, None, model_name, device_map="auto")
         # self.tokenizer, self.model, self.image_processor, self.max_length = load_pretrained_model(
         #         model, None, model_name, device_map="auto")
-        self.tokenizer, self.model, self.image_processor, self.max_length = load_pretrained_model(
-                model, None, model_name, device_map="cpu")
         self.model.eval()
 
     def query(self, prompt, image_path):
@@ -237,8 +237,8 @@ class LLAVA:
         conv.append_message(conv.roles[1], None)
         prompt_question = conv.get_prompt()
 
-        # input_ids = tokenizer_image_token(prompt_question, self.tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt").unsqueeze(0).to("cuda")
-        input_ids = tokenizer_image_token(prompt_question, self.tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt").unsqueeze(0)
+        input_ids = tokenizer_image_token(prompt_question, self.tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt").unsqueeze(0).to("cuda")
+        # input_ids = tokenizer_image_token(prompt_question, self.tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt").unsqueeze(0)
         image_sizes = [image.size]
 
         cont = self.model.generate(
@@ -249,7 +249,7 @@ class LLAVA:
             temperature=0,
             max_new_tokens=4096,
         )
-        text_outputs = self.tokenizer.batch_decode(cont, skip_special_tokens=True)
+        text_outputs = self.tokenizer.batch_decode(cont, skip_special_tokens=True)[0]
         print(text_outputs)
 
         return text_outputs, parse_response(text_outputs)
