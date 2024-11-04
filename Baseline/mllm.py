@@ -138,10 +138,10 @@ class Qwen:
                 "role": "user",
                 "content": [
                     {"type": "text", "text": prompt},
-                    # {
-                    #     "type": "image",
-                    #     "image": image_path,
-                    # },
+                    {
+                        "type": "image",
+                        "image": image_path,
+                    },
                 ],
             }
         ]
@@ -167,11 +167,11 @@ class Qwen:
         ]
         output_text = self.processor.batch_decode(
             generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
-        )
+        )[0]
 
         print(output_text)
 
-        # return output_text, parse_response(output_text)
+        return output_text, parse_response(output_text)
 
 class Molmo:
     def __init__(self, model='allenai/Molmo-72B-0924'):
