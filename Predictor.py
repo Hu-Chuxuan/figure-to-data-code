@@ -147,6 +147,7 @@ def main(args):
                     if len(read_res) > 1 or file_name+".csv" != read_res[0]:
                         print("Reading", file_name, "from", read_res)
             else:
+                res = None
                 try:
                     response, res = mllm.query(baseline_prompt, img_path)
                     with open(os.path.join(args.output, str(paper), file_name+".txt"), "w") as f:
