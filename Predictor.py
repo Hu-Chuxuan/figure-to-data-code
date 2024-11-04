@@ -148,19 +148,18 @@ def main(args):
                         print("Reading", file_name, "from", read_res)
             else:
                 res = None
-                response, res = mllm.query(baseline_prompt, img_path)
-                # try:
-                #     response, res = mllm.query(baseline_prompt, img_path)
-                with open(os.path.join(args.output, str(paper), file_name+".txt"), "w") as f:
-                    f.write(response)
-                # except pd.errors.ParserError as e:
-                #     print(e)
-                #     perf = {"ParserError": 1, "Success": 0, "WrongCSVNumberError": 0, "FormatError": 0, "Other exception": 0}
-                #     continue
-                # except Exception as e:
-                #     logging.error(RED + str(e) + RESET)
-                #     perf = {"Other exception": 1, "Success": 0, "ParserError": 0, "WrongCSVNumberError": 0, "FormatError": 0}
-                    # input("Press Enter to continue...")
+                try:
+                    response, res = mllm.query(baseline_prompt, img_path)
+                    with open(os.path.join(args.output, str(paper), file_name+".txt"), "w") as f:
+                        f.write(response)
+                except pd.errors.ParserError as e:
+                    print(e)
+                    perf = {"ParserError": 1, "Success": 0, "WrongCSVNumberError": 0, "FormatError": 0, "Other exception": 0}
+                    continue
+                except Exception as e:
+                    logging.error(RED + str(e) + RESET)
+                    perf = {"Other exception": 1, "Success": 0, "ParserError": 0, "WrongCSVNumberError": 0, "FormatError": 0}
+                    input("Press Enter to continue...")
             
                 if res == None:
                     continue
