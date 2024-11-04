@@ -120,8 +120,12 @@ class Claude:
 
 class Qwen:
     def __init__(self, model="Qwen/Qwen2-VL-72B-Instruct"):
+        # self.model = Qwen2VLForConditionalGeneration.from_pretrained(
+        #     model, torch_dtype=torch.bfloat16, attn_implementation="flash_attention_2",device_map="auto",
+        # )
+
         self.model = Qwen2VLForConditionalGeneration.from_pretrained(
-            model, torch_dtype=torch.bfloat16, attn_implementation="flash_attention_2",device_map="auto",
+            model, torch_dtype="auto", device_map="auto"
         )
 
         # default processer
@@ -154,7 +158,7 @@ class Qwen:
             padding=True,
             return_tensors="pt",
         )
-        inputs = inputs.to("cuda")
+        # inputs = inputs.to("cuda")
 
         # Inference: Generation of the output
         generated_ids = self.model.generate(**inputs, max_new_tokens=4096)
