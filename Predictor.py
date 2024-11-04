@@ -151,10 +151,12 @@ def main(args):
                         f.write(response)
                 except pd.errors.ParserError as e:
                     print(e)
+                    perf = {"ParserError": 1, "Success": 0}
                     continue
                 except Exception as e:
                     logging.error(RED + str(e) + RESET)
-                    input("Press Enter to continue...")
+                    perf = {"Other exception": 1, "Success": 0}
+                    # input("Press Enter to continue...")
             
                 if res == None:
                     continue
@@ -167,18 +169,31 @@ def main(args):
             try:
                 if data["Type"] in PLOT_TYPES:
                     perf = evaluate_plot(res, gts, data["Type"])
-                    # print(GREEN + pair_trace + RESET)
+                    
                 else:
                     perf = evaluate_table(res, gts)
+                perf["Success"] = 1
+                perf["ParserError"] = 0
+                perf["WrongCSVNumberError"] = 0
+                perf["FormatError"] = 0
+                perf["Other exception"] = 0
                 break
             except (WrongCSVNumberError, FormatError) as e:
                 logging.warning(e)
+                if type(e) == WrongCSVNumberError:
+                    perf = {"WrongCSVNumberError": 1, "Success": 0, "FormatError": 0, "ParserError": 0, "Other exception": 0}
+                else:
+                    perf = {"FormatError": 1, "Success": 0, "WrongCSVNumberError": 0, "ParserError": 0, "Other exception": 0}
                 continue
             except Exception as e:
                 logging.error(RED + str(e) + RESET)
-                input("Press Enter to continue...")
+                perf = {"Other exception": 1, "Success": 0, "WrongCSVNumberError": 0, "ParserError": 0, "FormatError": 0}
+                # input("Press Enter to continue...")
                 continue
         if perf is not None:
+            if perf["Success"] + perf["ParserError"] + perf["WrongCSVNumberError"] + perf["FormatError"] + perf["Other exception"] != 1:
+                print(perf)
+                input("Press Enter to continue...")
             perf_per_sample[file_name] = perf
         print(file_name, "performance:", perf)
     
