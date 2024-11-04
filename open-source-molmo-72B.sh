@@ -6,7 +6,7 @@
 #SBATCH --partition=ddkang
 #SBATCH --ntasks-per-node=3
 #SBATCH --gres=gpu:H100:1
-#SBATCH --constraint=ccc0419
+#SBATCH --nodelist=ccc0419
 #SBATCH --time=1-00:00:00
 #SBATCH --mem=200G
 
