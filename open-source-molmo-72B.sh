@@ -10,10 +10,10 @@
 #SBATCH --time=00:10:00
 #SBATCH --mem=200G
 
-# echo "Checking GPU availability..."
-# nvidia-smi
-# echo "CUDA availability in PyTorch:"
-# python -c "import torch; print('CUDA available:', torch.cuda.is_available())"
+echo "Checking GPU availability..."
+nvidia-smi
+echo "CUDA availability in PyTorch:"
+python -c "import torch; print('CUDA available:', torch.cuda.is_available())"
 
 mkdir ../output/Molmo-72B
 python Predictor.py --root ../figure-to-data --output ../output/Molmo-72B --model allenai/Molmo-72B-0924 --paper_list 1
