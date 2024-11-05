@@ -8,6 +8,7 @@ import base64
 import argparse
 import pandas as pd
 import torch
+import logging
 import torchvision.transforms as T
 from torchvision.transforms.functional import InterpolationMode
 from io import StringIO
@@ -221,8 +222,11 @@ class LLAVA:
         self.model.eval()
 
     def query(self, prompt, image_path):
+        logging.warning("query debug# read image: "+image_path)
         image = Image.open(image_path)
+        logging.warning("query debug# process image: "+image_path)
         image_tensor = process_images([image], self.image_processor, self.model.config)
+        logging.warning("query debug# image to cuda: "+image_path)
         image_tensor = [_image.to(dtype=torch.float16, device='cuda') for _image in image_tensor]
 
         conv_template = "qwen_2"  # Make sure you use correct chat template for different models
@@ -232,7 +236,9 @@ class LLAVA:
         conv.append_message(conv.roles[1], None)
         prompt_question = conv.get_prompt()
 
+        logging.warning("query debug# tokenizer: "+image_path)
         input_ids = tokenizer_image_token(prompt_question, self.tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt").unsqueeze(0).to("cuda")
+        logging.warning("query debug# tokenizer end: "+image_path)
         # input_ids = tokenizer_image_token(prompt_question, self.tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt").unsqueeze(0)
         image_sizes = [image.size]
 
@@ -244,8 +250,10 @@ class LLAVA:
             temperature=0,
             max_new_tokens=4096,
         )
+        logging.warning("query debug# generate end: "+image_path)
         text_outputs = self.tokenizer.batch_decode(cont, skip_special_tokens=True)[0]
-        print(text_outputs)
+        logging.warning(text_outputs)
+        # print(text_outputs)
 
         return text_outputs, parse_response(text_outputs)
 
