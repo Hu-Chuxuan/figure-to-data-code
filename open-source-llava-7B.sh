@@ -16,3 +16,5 @@ python -c "import torch; print('CUDA available:', torch.cuda.is_available())"
 
 mkdir ../output/Llava-7B
 python Predictor.py --root ../figure-to-data --output ../output/Llava-7B --model lmms-lab/llava-onevision-qwen2-7b-ov
+
+python Predictor.py --root ../figure-to-data --output ../output/Llava-7B --eval_only

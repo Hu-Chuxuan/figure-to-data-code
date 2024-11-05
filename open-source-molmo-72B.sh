@@ -16,3 +16,5 @@ python -c "import torch; print('CUDA available:', torch.cuda.is_available())"
 
 mkdir ../output/Molmo-72B
 python Predictor.py --root ../figure-to-data --output ../output/Molmo-72B --model allenai/Molmo-72B-0924
+
+python Predictor.py --root ../figure-to-data --output ../output/Molmo-72B --eval_only
