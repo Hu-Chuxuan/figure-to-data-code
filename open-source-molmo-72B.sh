@@ -6,7 +6,7 @@
 #SBATCH --partition=ddkang
 #SBATCH --ntasks-per-node=3
 #SBATCH --gres=gpu:H100:3
-#SBATCH --time=00:50:00
+#SBATCH --time=30:00:00
 #SBATCH --mem=240G
 
 echo "Checking GPU availability..."
@@ -15,4 +15,4 @@ echo "CUDA availability in PyTorch:"
 python -c "import torch; print('CUDA available:', torch.cuda.is_available())"
 
 mkdir ../output/Molmo-72B
-python Predictor.py --root ../figure-to-data --output ../output/Molmo-72B --model allenai/Molmo-72B-0924 --paper_list 1
+python Predictor.py --root ../figure-to-data --output ../output/Molmo-72B --model allenai/Molmo-72B-0924
