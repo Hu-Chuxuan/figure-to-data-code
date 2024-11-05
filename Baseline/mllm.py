@@ -35,6 +35,8 @@ def parse_response(response):
         if start == -1:
             break
         end = response.find("```", start+7)
+        if end == -1:
+            break
         df = pd.read_csv(StringIO(response[start+7:end]))
         res.append(df)
         pos = end + 3
