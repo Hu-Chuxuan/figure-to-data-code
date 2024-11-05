@@ -48,6 +48,7 @@ class Dataset:
         sample_idx = name[name.find("-O")+2:]
         gts = []
         read_gt_files = []
+        logging.warning("start loading csvs: " + name)
         if meta["Type"] in PLOT_TYPES:
             gts.append(pd.read_csv(os.path.join(paper_path, name+".csv")))
         else:
@@ -65,6 +66,7 @@ class Dataset:
                     else:
                         read_gt_files.append(file)
                         gts.append(pd.read_csv(os.path.join(paper_path, file)))
+        logging.warning("finish reading csvs: " + name)
         return {"image_path": img_path, "gt": gts, "Paper Index": paper, "File name": name, "Type": meta["Type"]}
 
 def stratify_results(perf_per_sample, metadata, group_by, filters=None):
