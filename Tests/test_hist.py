@@ -4,12 +4,13 @@ import unittest
 import sys, os
 
 sys.path.append(os.path.abspath(os.path.join('..')))
-from SubplotConstructor import Axis
-from Subplot import Histogram
+from Locator.SubplotConstructor import Axis
+from Locator.Histogram import Histogram
 
 class TestHistogram(unittest.TestCase):
     def test_simple(self):
-        image = cv2.imread("plots/P-55-O1.png")
+        image_path = "plots/P-55-O1 copy.png"
+        image = cv2.imread(image_path)
 
         x_axis = Axis(line_r=1060, line_c_lo=239, line_c_hi=1507, direction="x")
         x_axis.ticks = [350, 524, 699, 873, 1048, 1222, 1396]
@@ -20,7 +21,8 @@ class TestHistogram(unittest.TestCase):
         y_axis.set_labels([125, 100, 75, 50, 25, 0])
         subplot = Histogram(x_axis, y_axis, subplot_value="Figure 1", has_error_bars=False, value_direction="y")
 
-        subplot.estimate(image)
+        subplot.estimate(image_path)
+        print("finished running esimate")
         self.assertEqual(len(subplot.curves), 7)
         df = subplot.to_value().sort_values(by="Type-1")
         gt = pd.read_csv("gt/P-55-O1.csv").sort_values(by="Type-1")
