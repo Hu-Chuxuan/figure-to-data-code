@@ -3,7 +3,7 @@
 #SBATCH --job-name=qwen-7b
 #SBATCH --mail-user=chuxuan3@illinois.edu
 #SBATCH --mail-type=BEGIN,END
-#SBATCH --partition=secondary
+#SBATCH --partition=ddkang
 #SBATCH --ntasks-per-node=3
 #SBATCH --gres=gpu:H100:1
 #SBATCH --time=10:00:00
