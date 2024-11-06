@@ -376,5 +376,5 @@ class InternVL:
         generation_config = dict(max_new_tokens=1024, do_sample=True)
 
         response = self.model.chat(self.tokenizer, pixel_values, '<image>\n'+prompt, generation_config)
-        print(response)
+        logging.warning(response)
         return response, parse_response(response)
