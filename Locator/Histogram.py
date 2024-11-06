@@ -169,7 +169,7 @@ class Histogram(Subplot):
             contour = contours[i]
             area = cv2.contourArea(contour)
             x,y,w,h = cv2.boundingRect(contour)
-            if y + h > height/2 and w < (width/2):
+            if y + h > 2*height/3 and w < (width/2):
                 print(x,y,w,h, area)
                 cv2.rectangle(edge_contour_img, (x, y), (x + w, y + h), (0,255,0), 2)
                 bars.append((x,y,w,h))
@@ -389,9 +389,9 @@ class Histogram(Subplot):
         plt.show()
 
         # Export to CSV
-        with open('histogram_data.csv', mode='w', newline='') as file:
+        with open(image_path.split(".")[0] + ".csv", mode='w', newline='') as file:
             writer = csv.writer(file)
-            writer.writerow(['Bin Start', 'Height'])  # Write header
+            writer.writerow(['Type-1', 'Value'])  # Write header
             for i in range(len(bar_heights)):
                 writer.writerow([f'{bin_edges[i]} - {bin_edges[i] + bar_widths[i]}', f'{bar_heights[i]}'])  # Write each bin start and height
 
