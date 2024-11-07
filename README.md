@@ -35,6 +35,10 @@ for subplot in subplots:
 df = subplots2csv(subplots)
 ```
 
+# NOTE 
+
+To run InternVL models, modify the `modeling_internvl_chat.py` files to remove the `return_dict` argument in the `self.language_model.generate` function.
+
 # TODO
 
 - [ ] Clean image (``ImageCleaner.py: ImageCleaner``) and estimate axes (``SubplotConstructor.py: SubplotConstructor``)
