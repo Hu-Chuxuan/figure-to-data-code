@@ -162,7 +162,7 @@ def main(args):
                 except Exception as e:
                     logging.error(RED + str(e) + RESET)
                     perf = {"Other exception": 1, "Success": 0, "ParserError": 0, "WrongCSVNumberError": 0, "FormatError": 0}
-                    input("Press Enter to continue...")
+                    # input("Press Enter to continue...")
             
                 if res == None:
                     continue
