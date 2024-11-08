@@ -3,10 +3,10 @@
 #SBATCH --job-name=internvl2-76b
 #SBATCH --mail-user=chuxuan3@illinois.edu
 #SBATCH --mail-type=BEGIN,END
-#SBATCH --partition=ddkang
+#SBATCH --partition=secondary
 #SBATCH --ntasks-per-node=3
 #SBATCH --gres=gpu:H100:4
-#SBATCH --time=48:00:00
+#SBATCH --time=04:00:00
 #SBATCH --mem=320G
 
 echo "Checking GPU availability..."
