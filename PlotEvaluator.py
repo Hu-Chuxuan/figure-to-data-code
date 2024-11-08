@@ -162,29 +162,21 @@ def str_cost_fn(pred, gt):
         return 0
     
     # remove puctuations with 0.5 cost each chacacter
-    allow_remove_alpha = True
-    pred_ptr, gt_ptr = 0, 0
+    pred_ptr, gt_ptr = len(pred) - 1, len(gt) - 1
     cost = 0
-    while pred_ptr < len(pred) or gt_ptr < len(gt):
-        if pred_ptr < len(pred) and gt_ptr < len(gt) and pred[pred_ptr] == gt[gt_ptr]:
-            allow_remove_alpha = False
-            pred_ptr += 1
-            gt_ptr += 1
-        elif pred_ptr < len(pred) and not pred[pred_ptr].isalpha() and not pred[pred_ptr].isdigit():
-            pred_ptr += 1
+    while pred_ptr >= 0 and gt_ptr >= 0:
+        if pred_ptr >= 0 and gt_ptr >= 0 and pred[pred_ptr] == gt[gt_ptr]:
+            pred_ptr -= 1
+            gt_ptr -= 1
+        elif pred_ptr >= 0 and not pred[pred_ptr].isalpha() and not pred[pred_ptr].isdigit():
+            pred_ptr -= 1
             cost += 0.5
-        elif gt_ptr < len(gt) and not gt[gt_ptr].isalpha() and not gt[gt_ptr].isdigit():
-            gt_ptr += 1
+        elif gt_ptr >= 0 and not gt[gt_ptr].isalpha() and not gt[gt_ptr].isdigit():
+            gt_ptr -= 1
             cost += 0.5
-        elif allow_remove_alpha and pred_ptr < len(pred) and gt_ptr < len(gt):
-            if len(pred) < len(gt):
-                gt_ptr += 1
-            else:
-                pred_ptr += 1
-            cost += 1
         else:
             return np.inf
-    return cost
+    return cost + abs(pred_ptr - gt_ptr)
 
 '''
 @description: calculate the score of the pair of two values
@@ -447,16 +439,21 @@ def cal_perf(curves_in_subplot):
         curve_level_perf[subplot] = []
         for curve in curves:
             perf = {}
+            max_len = max(curve["gt_len"], curve["pred_len"])
             if len(curve["gt"]) != 0 and len(curve["pred"]) != 0:
                 pred_x = curve["pred"].get_clean_attr("x")
                 gt_x = curve["gt"].get_clean_attr("x")
                 if gt_x is not None:
-                    perf["X performance"] = cal_metrics(pred_x, gt_x, curve["x scale"], curve["x mean"])
-                perf["Value performance"] = cal_metrics(curve["pred"].y, curve["gt"].y, curve["y scale"], curve["y mean"])
+                    perf["X performance"] = cal_metrics(pred_x, gt_x, curve["x scale"], curve["x mean"], max_len)
+                perf["Value performance"] = cal_metrics(curve["pred"].y, curve["gt"].y, curve["y scale"], curve["y mean"], max_len)
                 if curve["gt"].err is not None:
                     if curve["pred"].err is None:
                         curve["pred"].err = np.zeros_like(curve["gt"].err)
-                    perf["Error performance"] = cal_metrics(curve["pred"].err, curve["gt"].err, curve["err scale"], curve["err mean"])
+                    perf["Error performance"] = cal_metrics(curve["pred"].err, curve["gt"].err, curve["err scale"], curve["err mean"], max_len)
+            else:
+                perf["X performance"] = {"MASE_clamp": 1, "MAPE_clamp": 1}
+                perf["Value performance"] = {"MAPE_clamp": 1, "SMAPE": 1}
+                perf["Error performance"] = {"MAPE_clamp": 1}
             if "gt_len" in curve:
                 if curve["gt_len"] == 0:
                     perf["DP accuracy"] = 0
@@ -473,7 +470,15 @@ def cal_perf(curves_in_subplot):
         subplot_level_perf.append(merge_perf(curve_perf))
     return merge_perf(subplot_level_perf)
 
-def cal_metrics(pred_values, gt_values, scale, mean):
+def pad_to_len(arr, max_len):
+    if len(arr) < max_len:
+        if len(arr.shape) == 1:
+            arr = np.concatenate([arr, np.array([np.inf] * (max_len - len(arr)))])
+        else:
+            arr = np.concatenate([arr, np.array([[np.inf] * arr.shape[1]] * (max_len - len(arr)))])
+    return arr
+
+def cal_metrics(pred_values, gt_values, scale, mean, max_len):
     perf = {}
     if len(pred_values.shape) == 1 and len(gt_values.shape) == 2:
         pred_values = pred_values.reshape(-1, 1)
@@ -482,17 +487,24 @@ def cal_metrics(pred_values, gt_values, scale, mean):
         scale = np.array([scale]).reshape(-1, 1)
         mean = np.array([mean]).reshape(-1, 1)
     # Mean Absolute Error
-    perf["MAE"] = np.mean(np.abs(pred_values - gt_values))
+    # perf["MAE"] = np.mean(np.abs(pred_values - gt_values))
     # Mean Absolute Percentage Error
     if 0 not in gt_values:
-        perf["MAPE"] = np.mean(np.abs(pred_values - gt_values) / np.abs(gt_values))
+        perf["MAPE"] = np.abs(pred_values - gt_values) / np.abs(gt_values)
     # Mean Absolute Percentage Error (epsilon = 1e-5)
-    perf["MAPE_eps"] = np.mean(np.abs(pred_values - gt_values) / (np.abs(gt_values) + 1e-5))
+    perf["MAPE_eps"] = np.abs(pred_values - gt_values) / (np.abs(gt_values) + 1e-5)
+    perf["MAPE_clamp"] = np.minimum(np.abs(pred_values - gt_values) / (np.abs(gt_values) + 1e-5), 1)
     # Symmetric Mean Absolute Percentage Error
-    perf["SMAPE"] = np.mean(np.abs(pred_values - gt_values) / (np.abs(pred_values) + np.abs(gt_values) + 1e-5)) * 2
+    perf["SMAPE_clamp"] = np.minimum(np.abs(pred_values - gt_values) / (np.abs(pred_values) + np.abs(gt_values) + 1e-5) * 2, 1)
+    perf["SMAPE"] = np.abs(pred_values - gt_values) / (np.abs(pred_values) + np.abs(gt_values) + 1e-5) * 2
     # Mean Absolute Scaled Error
     if (len(gt_values.shape) == 1 and scale != 0) or (len(gt_values.shape) > 1 and scale[0] != 0):
-        perf["MASE"] = np.mean(np.abs(pred_values - gt_values) / scale)
+        perf["MASE"] = np.abs(pred_values - gt_values) / scale
+        perf["MASE_clamp"] = np.minimum(np.abs(pred_values - gt_values) / scale, 1)
+    for key in perf.keys():
+        if perf[key].shape[0] < max_len:
+            perf[key] = np.concatenate([perf[key], np.array(object=[1] * (max_len - perf[key].shape[0]))])
+        perf[key] = np.mean(perf[key])
     # R-squared
     if len(gt_values.shape) == 1:
         r2_denom = np.sum((gt_values - mean) ** 2)
@@ -549,7 +561,7 @@ def evaluate_plot(pred_df, gt_df, plot_type):
                     max(max(pred_curve.x), max(gt_curve.x)), num=50)
                 pred_curve.interpolate(x_common)
                 gt_curve.interpolate(x_common)
-                curves.append({"pred": pred_curve, "gt": gt_curve, "y scale": np.max(gt_curve.y) - np.min(gt_curve.y), "y mean": np.mean(gt_curve.y)})
+                curves.append({"pred": pred_curve, "gt": gt_curve, "y scale": np.max(gt_curve.y) - np.min(gt_curve.y), "y mean": np.mean(gt_curve.y), "gt_len": len(gt_curve), "pred_len": len(pred_curve)})
                 if gt_curve.err is not None:
                     if len(gt_curve.err.shape) == 1:
                         curves[-1]["err scale"] = np.max(gt_curve.err) - np.min(gt_curve.err)

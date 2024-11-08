@@ -7,8 +7,8 @@ import json
 import pickle as pkl
 import numpy as np
 
-from Baseline.mllm import GPT, Claude, Qwen, Molmo, LLAVA, InternVL
-from Baseline.baseline import baseline_prompt
+from Baseline.mllm import GPT, Claude, Qwen, Molmo, LLAVA, InternVL, Gemini
+from Baseline.baseline import baseline_prompt, baseline_table, baseline_plot
 from PlotEvaluator import evaluate_plot, merge_perf, WrongCSVNumberError, FormatError
 from TableEvaluator import evaluate_table
 
@@ -30,7 +30,7 @@ class Dataset:
             if meta["Type"] in types:
                 if paper_list is None or meta["Paper Index"] in paper_list:
                     self.samples.append(sample)
-        logging.warning("Number of samples: " + str(len(self.samples)))
+        print("Number of samples:", len(self.samples))
     
     def __len__(self):
         return len(self.samples)
@@ -48,7 +48,6 @@ class Dataset:
         sample_idx = name[name.find("-O")+2:]
         gts = []
         read_gt_files = []
-        logging.warning("start loading csvs: " + name)
         if meta["Type"] in PLOT_TYPES:
             gts.append(pd.read_csv(os.path.join(paper_path, name+".csv")))
         else:
@@ -66,7 +65,6 @@ class Dataset:
                     else:
                         read_gt_files.append(file)
                         gts.append(pd.read_csv(os.path.join(paper_path, file)))
-        logging.warning("finish reading csvs: " + name)
         return {"image_path": img_path, "gt": gts, "Paper Index": paper, "File name": name, "Type": meta["Type"]}
 
 def stratify_results(perf_per_sample, metadata, group_by, filters=None):
@@ -91,11 +89,15 @@ def stratify_results(perf_per_sample, metadata, group_by, filters=None):
         else:
             key = tuple(key)
         if key not in stratified_results:
-            stratified_results[key] = []
-        stratified_results[key].append(perf)
+            stratified_results[key] = {}
+        stratified_results[key][sample] = perf
     results = {}
     for key, perfs in stratified_results.items():
-        results[key] = merge_perf(perfs)
+        if group_by[0] == "Paper Index":
+            results[key] = merge_perf([perfs[sample] for sample in perfs])
+        else:
+            group_by_paper = stratify_results(perfs, metadata, ["Paper Index"])
+            results[key] = merge_perf([group_by_paper[paper] for paper in group_by_paper])
     return results
 
 def main(args):
@@ -106,15 +108,30 @@ def main(args):
     elif "gpt" in args.model.lower():
         mllm = GPT(args.api, args.org, args.model)
     elif "claude" in args.model.lower():
-        mllm = Claude(args.api, args.org, args.model)
-    elif "llava" in args.model.lower():
-        mllm = LLAVA(args.model)
-    elif "molmo" in args.model.lower():
-        mllm = Molmo(args.model)
-    elif "internvl" in args.model.lower():
-        mllm = InternVL(args.model)
+        mllm = Claude(args.api, args.model)
+    elif "gemini" in args.model.lower():
+        mllm = Gemini(args.api, args.model)
     elif "qwen" in args.model.lower():
         mllm = Qwen(args.model)
+    elif "molmo" in args.model.lower():
+        mllm = Molmo(args.model)
+    elif "llava" in args.model.lower():
+        mllm = LLAVA(args.model)
+    elif "internvl" in args.model.lower():
+        mllm = InternVL(args.model)
+
+    if args.Prompt == "both":
+        prompt = baseline_prompt
+        print("Using baseline prompt")
+    elif args.Prompt == "table":
+        prompt = baseline_table
+        args.types = ["Table"]
+        print("Using baseline table prompt")
+    elif args.Prompt == "plot":
+        prompt = baseline_plot
+        if "Table" in args.types:
+            args.types.remove("Table")
+        print("Using baseline plot prompt")
     
     dataset = Dataset(args.root, args.types, args.paper_list)
 
@@ -126,10 +143,10 @@ def main(args):
         if not os.path.exists(os.path.join(args.output, str(paper))):
             os.makedirs(os.path.join(args.output, str(paper)))
         perf = None
-        logging.warning("===================" + file_name + "===================")
+        print("===================", file_name, "===================")
         for retry in range(MAX_RETRIES):
-            logging.warning("***"+str(retry+1)+"trial ***")
-            if args.eval_only:
+            print("***", retry+1, "trial ***")
+            if args.eval_only or (args.resume_from is not None and data["File name"] != args.resume_from):
                 res = []
                 read_res = []
                 results = os.listdir(os.path.join(args.output, str(paper)))
@@ -147,21 +164,33 @@ def main(args):
                             break
                 if len(read_res) > 0:
                     if len(read_res) > 1 or file_name+".csv" != read_res[0]:
-                        logging.warning("Reading " + file_name + " from ", read_res)
+                        print("Reading", file_name, "from", read_res)
             else:
+                args.resume_from = None
                 res = None
-                # response, res = mllm.query(baseline_prompt, img_path)
                 try:
-                    response, res = mllm.query(baseline_prompt, img_path)
+                    response, res = mllm.query(prompt, img_path)
                     with open(os.path.join(args.output, str(paper), file_name+".txt"), "w") as f:
                         f.write(response)
                 except pd.errors.ParserError as e:
-                    logging.warning(e)
+                    print(e)
                     perf = {"ParserError": 1, "Success": 0, "WrongCSVNumberError": 0, "FormatError": 0, "Other exception": 0}
+                    if data["Type"] == "Table":
+                        perf["Table accuracy"] = 0
+                    else:
+                        perf["Value performance"] = {"MASE_clamp": 1, "MAPE_clamp": 1}
+                        perf["Error performance"] = {"MASE_clamp": 1, "MAPE_clamp": 1}
+                        perf["X performance"] = {"MASE_clamp": 1, "MAPE_clamp": 1}
                     continue
                 except Exception as e:
                     logging.error(RED + str(e) + RESET)
                     perf = {"Other exception": 1, "Success": 0, "ParserError": 0, "WrongCSVNumberError": 0, "FormatError": 0}
+                    if data["Type"] == "Table":
+                        perf["Table accuracy"] = 0
+                    else:
+                        perf["Value performance"] = {"MASE_clamp": 1, "MAPE_clamp": 1}
+                        perf["Error performance"] = {"MASE_clamp": 1, "MAPE_clamp": 1}
+                        perf["X performance"] = {"MASE_clamp": 1, "MAPE_clamp": 1}
                     # input("Press Enter to continue...")
             
                 if res == None:
@@ -190,18 +219,30 @@ def main(args):
                     perf = {"WrongCSVNumberError": 1, "Success": 0, "FormatError": 0, "ParserError": 0, "Other exception": 0}
                 else:
                     perf = {"FormatError": 1, "Success": 0, "WrongCSVNumberError": 0, "ParserError": 0, "Other exception": 0}
+                if data["Type"] == "Table":
+                    perf["Table accuracy"] = 0
+                else:
+                    perf["Value performance"] = {"MASE_clamp": 1, "MAPE_clamp": 1}
+                    perf["Error performance"] = {"MASE_clamp": 1, "MAPE_clamp": 1}
+                    perf["X performance"] = {"MASE_clamp": 1, "MAPE_clamp": 1}
                 continue
             except Exception as e:
                 logging.error(RED + str(e) + RESET)
                 perf = {"Other exception": 1, "Success": 0, "WrongCSVNumberError": 0, "ParserError": 0, "FormatError": 0}
+                if data["Type"] == "Table":
+                    perf["Table accuracy"] = 0
+                else:
+                    perf["Value performance"] = {"MASE_clamp": 1, "MAPE_clamp": 1}
+                    perf["Error performance"] = {"MASE_clamp": 1, "MAPE_clamp": 1}
+                    perf["X performance"] = {"MASE_clamp": 1, "MAPE_clamp": 1}
                 # input("Press Enter to continue...")
                 continue
         if perf is not None:
             if perf["Success"] + perf["ParserError"] + perf["WrongCSVNumberError"] + perf["FormatError"] + perf["Other exception"] != 1:
-                logging.warning(perf)
-                # input("Press Enter to continue...")
+                print(perf)
+                input("Press Enter to continue...")
             perf_per_sample[file_name] = perf
-        logging.warning(file_name + " performance: " + str(perf))
+        print(file_name, "performance:", perf)
     
     perfs_per_paper = stratify_results(perf_per_sample, dataset.metadata, ["Paper Index"])
     final_perfs = merge_perf([perfs_per_paper[paper] for paper in perfs_per_paper])
@@ -222,9 +263,9 @@ def main(args):
         stratified_results["# Row"] = stratify_results(perf_per_sample, dataset.metadata, ["# Row"], filters=[("Type", ["Table"])])
         stratified_results["# Column"] = stratify_results(perf_per_sample, dataset.metadata, ["# Column"], filters=[("Type", ["Table"])])
 
-    logging.warning("================= Final Performance =================")
-    logging.warning(str(final_perfs))
-    logging.warning("=====================================================")
+    print("================= Final Performance =================")
+    print(final_perfs)
+    print("=====================================================")
 
     with open(os.path.join(args.output, "perfs.json"), "w") as f:
         json.dump(final_perfs, f, indent=4)
@@ -243,6 +284,8 @@ if __name__ == "__main__":
     parser.add_argument('--model', type=str)
     parser.add_argument('--eval_only', action="store_true")
     parser.add_argument('--paper_list', type=int, nargs="*", help='List of paper indices')
+    parser.add_argument('--Prompt', type=str, help='Prompt to use', default="both", choices=["both", "table", "plot"])
+    parser.add_argument("--resume_from", type=str, help="First file to resume from")
     args = parser.parse_args()
 
     main(args)
