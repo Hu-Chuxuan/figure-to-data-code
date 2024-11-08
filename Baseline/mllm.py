@@ -377,6 +377,7 @@ class InternVL:
 
     def query(self, prompt, image_path):
         pixel_values = load_image(image_path, max_num=12).to(torch.bfloat16).cuda()
+        logging.warning(f"Pixel values tensor device: {pixel_values.device}")
         generation_config = dict(max_new_tokens=1024, do_sample=True)
 
         response = self.model.chat(self.tokenizer, pixel_values, '<image>\n'+prompt, generation_config)
