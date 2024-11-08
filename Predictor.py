@@ -8,7 +8,7 @@ import pickle as pkl
 import numpy as np
 
 from Baseline.mllm import GPT, Claude, Qwen, Molmo, LLAVA, InternVL
-from Baseline.baseline import baseline_prompt, baseline_table, baseline_plot
+from Baseline.baseline import baseline_prompt
 from PlotEvaluator import evaluate_plot, merge_perf, WrongCSVNumberError, FormatError
 from TableEvaluator import evaluate_table
 
