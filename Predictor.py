@@ -7,7 +7,7 @@ import json
 import pickle as pkl
 import numpy as np
 
-from Baseline.mllm import GPT, Claude, Qwen, Molmo, LLAVA, InternVL, Gemini
+from Baseline.mllm import GPT, Claude, Qwen, Molmo, LLAVA, InternVL
 from Baseline.baseline import baseline_prompt, baseline_table, baseline_plot
 from PlotEvaluator import evaluate_plot, merge_perf, WrongCSVNumberError, FormatError
 from TableEvaluator import evaluate_table
@@ -109,8 +109,6 @@ def main(args):
         mllm = GPT(args.api, args.org, args.model)
     elif "claude" in args.model.lower():
         mllm = Claude(args.api, args.model)
-    elif "gemini" in args.model.lower():
-        mllm = Gemini(args.api, args.model)
     elif "qwen" in args.model.lower():
         mllm = Qwen(args.model)
     elif "molmo" in args.model.lower():
