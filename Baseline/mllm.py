@@ -371,7 +371,7 @@ class InternVL:
             device_map=device_map).eval()
         
         for name, param in self.model.named_parameters():
-            print(name, param.device)
+            logging.warning(name, param.device)
 
         self.tokenizer = AutoTokenizer.from_pretrained(model, trust_remote_code=True, use_fast=False)
 
