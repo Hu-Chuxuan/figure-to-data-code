@@ -450,6 +450,12 @@ def cal_perf(curves_in_subplot):
                     if curve["pred"].err is None:
                         curve["pred"].err = np.zeros_like(curve["gt"].err)
                     perf["Error performance"] = cal_metrics(curve["pred"].err, curve["gt"].err, curve["err scale"], curve["err mean"], max_len)
+                component_perfs = []
+                for component in ["X performance", "Value performance", "Error performance"]:
+                    if component in perf:
+                        component_perfs.append(perf[component])
+                if len(component_perfs) > 0:
+                    perf["Overall performance"] = merge_perf(component_perfs)
             else:
                 perf["X performance"] = {"MASE_clamp": 1, "MAPE_clamp": 1}
                 perf["Value performance"] = {"MAPE_clamp": 1, "SMAPE": 1}

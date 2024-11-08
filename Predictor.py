@@ -109,6 +109,8 @@ def main(args):
         mllm = GPT(args.api, args.org, args.model)
     elif "claude" in args.model.lower():
         mllm = Claude(args.api, args.model)
+    elif "gemini" in args.model.lower():
+        mllm = Gemini(args.api, args.model)
     elif "qwen" in args.model.lower():
         mllm = Qwen(args.model)
     elif "molmo" in args.model.lower():
@@ -240,6 +242,7 @@ def main(args):
                 print(perf)
                 input("Press Enter to continue...")
             perf_per_sample[file_name] = perf
+            dataset.metadata[file_name]["Success"] = perf["Success"]
         print(file_name, "performance:", perf)
     
     perfs_per_paper = stratify_results(perf_per_sample, dataset.metadata, ["Paper Index"])
@@ -247,6 +250,7 @@ def main(args):
 
     stratified_results = {}
     stratified_results["Type"] = stratify_results(perf_per_sample, dataset.metadata, ["Type"])
+    stratified_results["Success"] = stratify_results(perf_per_sample, dataset.metadata, ["Success"])
 
     if any([t in args.types for t in PLOT_TYPES]):
         stratified_results["# Subplot"] = stratify_results(perf_per_sample, dataset.metadata, ["# Subplot"], filters=[("Type", PLOT_TYPES)])
