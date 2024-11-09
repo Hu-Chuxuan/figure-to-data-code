@@ -454,12 +454,12 @@ def cal_perf(curves_in_subplot):
                 for component in ["X performance", "Value performance", "Error performance"]:
                     if component in perf:
                         component_perfs.append(perf[component])
-                if len(component_perfs) > 0:
-                    perf["Overall performance"] = merge_perf(component_perfs)
+                perf["Overall performance"] = merge_perf(component_perfs)
             else:
                 perf["X performance"] = {"MASE_clamp": 1, "MAPE_clamp": 1}
-                perf["Value performance"] = {"MAPE_clamp": 1, "SMAPE": 1}
-                perf["Error performance"] = {"MAPE_clamp": 1}
+                perf["Value performance"] = {"MAPE_clamp": 1, "MASE_clamp": 1}
+                perf["Error performance"] = {"MAPE_clamp": 1, "MASE_clamp": 1}
+                perf["Overall performance"] = {"MAPE_clamp": 1, "MASE_clamp": 1}
             if "gt_len" in curve:
                 if curve["gt_len"] == 0:
                     perf["DP accuracy"] = 0
@@ -501,7 +501,6 @@ def cal_metrics(pred_values, gt_values, scale, mean, max_len):
     perf["MAPE_eps"] = np.abs(pred_values - gt_values) / (np.abs(gt_values) + 1e-5)
     perf["MAPE_clamp"] = np.minimum(np.abs(pred_values - gt_values) / (np.abs(gt_values) + 1e-5), 1)
     # Symmetric Mean Absolute Percentage Error
-    perf["SMAPE_clamp"] = np.minimum(np.abs(pred_values - gt_values) / (np.abs(pred_values) + np.abs(gt_values) + 1e-5) * 2, 1)
     perf["SMAPE"] = np.abs(pred_values - gt_values) / (np.abs(pred_values) + np.abs(gt_values) + 1e-5) * 2
     # Mean Absolute Scaled Error
     if (len(gt_values.shape) == 1 and scale != 0) or (len(gt_values.shape) > 1 and scale[0] != 0):

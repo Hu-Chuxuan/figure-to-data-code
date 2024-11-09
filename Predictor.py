@@ -181,6 +181,7 @@ def main(args):
                         perf["Value performance"] = {"MASE_clamp": 1, "MAPE_clamp": 1}
                         perf["Error performance"] = {"MASE_clamp": 1, "MAPE_clamp": 1}
                         perf["X performance"] = {"MASE_clamp": 1, "MAPE_clamp": 1}
+                        perf["Overall performance"] = {"MAPE_clamp": 1, "MASE_clamp": 1}
                     continue
                 except Exception as e:
                     logging.error(RED + str(e) + RESET)
@@ -191,6 +192,7 @@ def main(args):
                         perf["Value performance"] = {"MASE_clamp": 1, "MAPE_clamp": 1}
                         perf["Error performance"] = {"MASE_clamp": 1, "MAPE_clamp": 1}
                         perf["X performance"] = {"MASE_clamp": 1, "MAPE_clamp": 1}
+                        perf["Overall performance"] = {"MAPE_clamp": 1, "MASE_clamp": 1}
                     # input("Press Enter to continue...")
             
                 if res == None:
@@ -225,6 +227,7 @@ def main(args):
                     perf["Value performance"] = {"MASE_clamp": 1, "MAPE_clamp": 1}
                     perf["Error performance"] = {"MASE_clamp": 1, "MAPE_clamp": 1}
                     perf["X performance"] = {"MASE_clamp": 1, "MAPE_clamp": 1}
+                    perf["Overall performance"] = {"MAPE_clamp": 1, "MASE_clamp": 1}
                 continue
             except Exception as e:
                 logging.error(RED + str(e) + RESET)
@@ -235,6 +238,7 @@ def main(args):
                     perf["Value performance"] = {"MASE_clamp": 1, "MAPE_clamp": 1}
                     perf["Error performance"] = {"MASE_clamp": 1, "MAPE_clamp": 1}
                     perf["X performance"] = {"MASE_clamp": 1, "MAPE_clamp": 1}
+                    perf["Overall performance"] = {"MAPE_clamp": 1, "MASE_clamp": 1}
                 # input("Press Enter to continue...")
                 continue
         if perf is not None:
