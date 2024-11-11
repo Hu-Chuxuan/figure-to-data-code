@@ -8,7 +8,8 @@ import pickle as pkl
 import numpy as np
 
 from Baseline.mllm import GPT, Claude, Qwen, Molmo, LLAVA, InternVL
-from Baseline.baseline import baseline_prompt
+from Baseline.baseline import baseline_prompt, plot_first, baseline_table, baseline_plot
+from Baseline.cot import cot_prompt
 from PlotEvaluator import evaluate_plot, merge_perf, WrongCSVNumberError, FormatError
 from TableEvaluator import evaluate_table
 
@@ -67,7 +68,7 @@ class Dataset:
                         gts.append(pd.read_csv(os.path.join(paper_path, file)))
         return {"image_path": img_path, "gt": gts, "Paper Index": paper, "File name": name, "Type": meta["Type"]}
 
-def stratify_results(perf_per_sample, metadata, group_by, filters=None):
+def stratify_results(perf_per_sample, metadata, group_by, filters=None, by_paper=True):
     stratified_results = {}
     for sample, perf in perf_per_sample.items():
         meta = metadata[sample]
@@ -132,6 +133,12 @@ def main(args):
         if "Table" in args.types:
             args.types.remove("Table")
         print("Using baseline plot prompt")
+    elif args.Prompt == "cot":
+        prompt = cot_prompt
+        print("Using COT prompt")
+    elif args.Prompt == "plot_first":
+        prompt = plot_first
+        print("Using plot first prompt")
     
     dataset = Dataset(args.root, args.types, args.paper_list)
 
@@ -257,17 +264,17 @@ def main(args):
     stratified_results["Success"] = stratify_results(perf_per_sample, dataset.metadata, ["Success"])
 
     if any([t in args.types for t in PLOT_TYPES]):
-        stratified_results["# Subplot"] = stratify_results(perf_per_sample, dataset.metadata, ["# Subplot"], filters=[("Type", PLOT_TYPES)])
-        stratified_results["# Curve"] = stratify_results(perf_per_sample, dataset.metadata, ["# Curve"], filters=[("Type", PLOT_TYPES)])
-        stratified_results["Vector/Pixel"] = stratify_results(perf_per_sample, dataset.metadata, ["Vector/Pixel"], filters=[("Type", PLOT_TYPES)])
-        stratified_results["Axis"] = stratify_results(perf_per_sample, dataset.metadata, ["Axis"], filters=[("Type", PLOT_TYPES)])
-        stratified_results["# Data Points"] = stratify_results(perf_per_sample, dataset.metadata, ["# Data Points"], filters=[("Type", PLOT_TYPES)])
+        stratified_results["# Subplot"] = stratify_results(perf_per_sample, dataset.metadata, ["# Subplot"], filters=[("Type", PLOT_TYPES)], by_paper=False)
+        stratified_results["# Curve"] = stratify_results(perf_per_sample, dataset.metadata, ["# Curve"], filters=[("Type", PLOT_TYPES)], by_paper=False)
+        stratified_results["Vector/Pixel"] = stratify_results(perf_per_sample, dataset.metadata, ["Vector/Pixel"], filters=[("Type", PLOT_TYPES)], by_paper=False)
+        stratified_results["Axis"] = stratify_results(perf_per_sample, dataset.metadata, ["Axis"], filters=[("Type", PLOT_TYPES)], by_paper=False)
+        stratified_results["# Data Points"] = stratify_results(perf_per_sample, dataset.metadata, ["# Data Points"], filters=[("Type", PLOT_TYPES)], by_paper=False)
     
     if "Table" in args.types:
-        stratified_results["Rotate"] = stratify_results(perf_per_sample, dataset.metadata, ["Rotate"], filters=[("Type", ["Table"])])
-        stratified_results["# Panel"] = stratify_results(perf_per_sample, dataset.metadata, ["# Panel"], filters=[("Type", ["Table"])])
-        stratified_results["# Row"] = stratify_results(perf_per_sample, dataset.metadata, ["# Row"], filters=[("Type", ["Table"])])
-        stratified_results["# Column"] = stratify_results(perf_per_sample, dataset.metadata, ["# Column"], filters=[("Type", ["Table"])])
+        stratified_results["Rotate"] = stratify_results(perf_per_sample, dataset.metadata, ["Rotate"], filters=[("Type", ["Table"])], by_paper=False)
+        stratified_results["# Panel"] = stratify_results(perf_per_sample, dataset.metadata, ["# Panel"], filters=[("Type", ["Table"])], by_paper=False)
+        stratified_results["# Row"] = stratify_results(perf_per_sample, dataset.metadata, ["# Row"], filters=[("Type", ["Table"])], by_paper=False)
+        stratified_results["# Column"] = stratify_results(perf_per_sample, dataset.metadata, ["# Column"], filters=[("Type", ["Table"])], by_paper=False)
 
     print("================= Final Performance =================")
     print(final_perfs)
@@ -290,7 +297,7 @@ if __name__ == "__main__":
     parser.add_argument('--model', type=str)
     parser.add_argument('--eval_only', action="store_true")
     parser.add_argument('--paper_list', type=int, nargs="*", help='List of paper indices')
-    parser.add_argument('--Prompt', type=str, help='Prompt to use', default="both", choices=["both", "table", "plot"])
+    parser.add_argument('--Prompt', type=str, help='Prompt to use', default="both", choices=["both", "table", "plot", "cot", "plot_first"])
     parser.add_argument("--resume_from", type=str, help="First file to resume from")
     args = parser.parse_args()
 
