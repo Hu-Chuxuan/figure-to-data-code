@@ -190,7 +190,7 @@ def encode_image(image_path):
     return base64.b64encode(image_file.read()).decode('utf-8')
   
 def get_gpt_response(base64_image, text):
-  client = OpenAI(api_key = "secret-shhh")
+  client = OpenAI(api_key = "secret")
   response = client.chat.completions.create(
     model="gpt-4o",
     messages=[
@@ -360,12 +360,158 @@ def get_clusters(image):
 
 
 
-
-
-
-
+# get axis version 2
 
 def get_axis(image):
+    # Convert image to grayscale
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    
+    # Apply a binary threshold to make black lines prominent
+    _, binary = cv2.threshold(gray, 50, 255, cv2.THRESH_BINARY_INV)
+    
+    # Use Canny edge detection to detect edges
+    edges = cv2.Canny(binary, 50, 150)
+    
+    # Detect lines using Hough Line Transform
+    lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=0, minLineLength=1, maxLineGap=0)
+
+
+
+
+    # Create a copy of the original image to draw the lines
+    image_with_lines = image.copy()
+
+    # Draw each line on the image
+    if lines is not None:
+        for line in lines:
+            for x1, y1, x2, y2 in line:
+                cv2.line(image_with_lines, (x1, y1), (x2, y2), (0, 255, 0), 2)  # Green line for visibility
+
+    # Display the image with detected lines
+    plt.figure(figsize=(8, 6))
+    plt.imshow(cv2.cvtColor(image_with_lines, cv2.COLOR_BGR2RGB))  # Convert BGR to RGB for correct color display
+    plt.axis('off')  # Hide axis numbers
+    plt.title("Lines Detected with Hough Transform")
+    plt.show()
+
+
+
+    
+    # Initialize list to store detected horizontal axis lines
+    axis_lines = []
+    
+    for line in lines:
+        for x1, y1, x2, y2 in line:
+            # Check if line is horizontal (small angle)
+            if abs(y1 - y2) < 5:  # Adjust tolerance as needed
+                axis_lines.append((x1, y1, x2, y2))
+    
+    def has_white_pixel_between(image, x1, y1, x2, y2):
+        # Ensure x1 <= x2 for consistent traversal
+        if x2 < x1:
+            x1, x2 = x2, x1
+            y1, y2 = y2, y1
+
+        # Calculate the number of points to sample along the line
+        num_points = int(np.hypot(x2 - x1, y2 - y1))
+        
+        # Check each sampled point along the line
+        for i in range(num_points):
+            x = int(x1 + i * (x2 - x1) / num_points)
+            y = int(y1 + i * (y2 - y1) / num_points)
+            
+            # Check if the pixel at (x, y) is white in the binary image
+            if image[y, x] > 240:  # Assuming white is any value > 200
+                return True
+        return False
+    
+    # Group lines by their vertical position to find clusters of horizontal lines
+    axis_clusters = []
+    for line in axis_lines:
+        x1, y1, x2, y2 = line
+        added_to_cluster = False
+        for cluster in axis_clusters:
+            # Check if this line is close in vertical position to an existing cluster
+
+
+            cluster_y_values = [ (line[1] + line[3]) / 2 for line in cluster ]
+            cluster_mean_y = np.mean(cluster_y_values)
+
+            if abs(cluster_mean_y - y1) < 5:  # Adjust tolerance as needed
+                # Check for white pixels between the last line in the cluster and this line
+                last_x1, last_y1, last_x2, last_y2 = cluster[-1]
+                if not has_white_pixel_between(binary, last_x1, cluster_mean_y, x1, cluster_mean_y) and not has_white_pixel_between(binary, last_x1, last_y2, x1, y2) and not has_white_pixel_between(binary, last_x1, last_y1, x1, y1):
+                    cluster.append(line)
+                    added_to_cluster = True
+                    #break
+        if not added_to_cluster:
+            axis_clusters.append([line])
+    
+    # Choose the most prominent horizontal line cluster as the axis
+    max_combined_x_distance = 0
+    horizontal_axis = None
+
+    for cluster in axis_clusters:
+        # Calculate the combined x distance for the cluster
+        
+
+        # if len(cluster) > 15:
+        #     cluster_image = image.copy()
+            
+        #     # Draw each line in the cluster
+        #     for line in cluster:
+        #         x1, y1, x2, y2 = line
+        #         cv2.line(cluster_image, (x1, y1), (x2, y2), (255, 0, 0), 2)  # Red color for cluster lines
+            
+        #     # Display the image for the current cluster
+        #     plt.figure(figsize=(8, 6))
+        #     plt.imshow(cv2.cvtColor(cluster_image, cv2.COLOR_BGR2RGB))
+        #     plt.axis('off')
+        #     plt.title(f"Cluster with {len(cluster)} lines")
+        #     plt.show()
+
+
+        combined_x_distance = sum(line[2] - line[0] for line in cluster)  # Sum of x2 - x1 for each line in the cluster
+        
+        # Choose the cluster with the maximum combined x distance
+        if combined_x_distance > max_combined_x_distance:
+            max_combined_x_distance = combined_x_distance
+            horizontal_axis = cluster
+
+    #print("horizontal_axis", horizontal_axis)
+    
+    # Draw the detected axis line on the image for visualization
+    if horizontal_axis:
+        cluster_y_values = [ (line[1] + line[3]) / 2 for line in horizontal_axis ]
+        axis_row = int(-(np.mean(cluster_y_values) // -1))
+        #axis_row = min(line[1] for line in horizontal_axis)
+        min_col = min(line[0] for line in horizontal_axis)
+        max_col = max(line[2] for line in horizontal_axis)
+        cv2.line(image, (min_col, axis_row), (max_col, axis_row), (0, 255, 0), 2)
+        plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+        plt.axis('off')
+        plt.show()
+    
+    return gray, axis_row, min_col, max_col
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# def get_axis(image):
     # Convert image to grayscale
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     
@@ -501,6 +647,13 @@ def transform_back_to_original(points, image_height, image_width):
     return original_points
 
 
+def plot_ticks_on_image(image, ticks):
+    for tick in ticks:
+        # Draw a blue dot (filled circle) at each tick position
+        axis_row, col = tick
+        cv2.circle(image, (col, axis_row), radius=3, color=(255, 0, 0), thickness=-1)  # Blue dot with radius 3
+    return image
+
 
 def get_ratios(image_path):
 
@@ -508,12 +661,29 @@ def get_ratios(image_path):
 
     gray, axis_row_x, min_col_x, max_col_x = get_axis(cv2.imread(image_path))
     x_ticks = get_ticks(gray, axis_row_x, min_col_x, max_col_x)
+    result_image = plot_ticks_on_image(image, x_ticks)
+
+    # Display the result in Jupyter Notebook
+    import matplotlib.pyplot as plt
+    plt.figure(figsize=(10, 6))
+    plt.imshow(cv2.cvtColor(result_image, cv2.COLOR_BGR2RGB))  # Convert BGR to RGB for correct colors
+    plt.axis('off')
+    plt.title('Ticks Marked on Image')
+    plt.show()
     print("x_ticks", x_ticks)
 
     rotated_image_counterclockwise = cv2.rotate(image, cv2.ROTATE_90_COUNTERCLOCKWISE)
     correct_format = cv2.flip(rotated_image_counterclockwise, 1)
     gray_transformed, axis_row_y, min_col_y, max_col_y = get_axis(correct_format)
     y_ticks = get_ticks(gray_transformed, axis_row_y, min_col_y, max_col_y)
+
+
+    result_image = plot_ticks_on_image(correct_format, y_ticks)
+    plt.figure(figsize=(10, 6))
+    plt.imshow(cv2.cvtColor(result_image, cv2.COLOR_BGR2RGB))  # Convert BGR to RGB for correct colors
+    plt.axis('off')
+    plt.title('Ticks Marked on Image')
+    plt.show()
     print("y_ticks_inital", y_ticks)
 
     H, W = gray_transformed.shape[:2]
@@ -551,7 +721,7 @@ def get_ratios(image_path):
 
 # Usage
 
-image_path_real = "your-image-path"
+image_path_real = "p.png"
 
 image_copied = cv2.imread(image_path_real).copy()
 cv2.imwrite("copied_image.png", image_copied)
