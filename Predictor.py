@@ -9,7 +9,7 @@ import numpy as np
 
 from Baseline.mllm import GPT, Claude, Qwen, Molmo, LLAVA, InternVL, Gemini
 from Baseline.baseline import baseline_prompt, plot_first, baseline_table, baseline_plot
-from Baseline.cot import cot_prompt
+from Baseline.cot import cot_prompt, cot_rl_prompt
 from Baseline.examples import table_examples, plot_examples
 from PlotEvaluator import evaluate_plot, merge_perf, WrongCSVNumberError, FormatError
 from TableEvaluator import evaluate_table
@@ -140,6 +140,9 @@ def main(args):
     elif args.Prompt == "plot_first":
         base_prompt = plot_first
         print("Using plot first prompt")
+    elif args.Prompt == "rl":
+        base_prompt = cot_rl_prompt
+        print("Using RL prompt")
     
     dataset = Dataset(args.root, args.types, args.paper_list)
 
@@ -311,7 +314,7 @@ if __name__ == "__main__":
     parser.add_argument('--model', type=str)
     parser.add_argument('--eval_only', action="store_true")
     parser.add_argument('--paper_list', type=int, nargs="*", help='List of paper indices')
-    parser.add_argument('--Prompt', type=str, help='Prompt to use', default="both", choices=["both", "table", "plot", "cot", "plot_first"])
+    parser.add_argument('--Prompt', type=str, help='Prompt to use', default="both", choices=["both", "table", "plot", "cot", "plot_first", "rl"])
     parser.add_argument("--resume_from", type=str, help="First file to resume from")
     parser.add_argument("--shot", type=int, help="Number of examples to provide to the model", default=0)
     args = parser.parse_args()
