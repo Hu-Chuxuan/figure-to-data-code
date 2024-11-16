@@ -15,4 +15,4 @@ echo "CUDA availability in PyTorch:"
 python -c "import torch; print('CUDA available:', torch.cuda.is_available())"
 
 mkdir ../output/InternVL2-1B-2-Shot-COT
-python Predictor.py --root ../figure-to-data --output ../output/InternVL2-1B-2-Shot-COT --model OpenGVLab/InternVL2-1B --Prompt --shot 2
+python Predictor.py --root ../figure-to-data --output ../output/InternVL2-1B-2-Shot-COT --model OpenGVLab/InternVL2-1B --Prompt cot --shot 2
