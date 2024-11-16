@@ -20,6 +20,9 @@ from llava.conversation import conv_templates, SeparatorStyle
 import google.generativeai as genai
 import time
 import logging
+import os
+
+image_home_dir = "/projects/illinois/eng/cs/ddkang/chuxuan3/fig2dat/figure-to-data/" # modify accordingly
 
 def encode_image(image):
     # use base64 to encode the cv2 image
@@ -62,17 +65,46 @@ class GPT:
     def __init__(self, api, org, model):
         self.client = OpenAI(api_key=api, organization=org)
         self.model = model
-    
-    def query(self, prompt, image_path, examples=[]):
-        image = cv2.imread(image_path)
-        encoded_img = encode_image(image)
-        msg = [
-            {
+
+    def generate_messages(self, prompt, encoded_img, examples):
+        res = []
+        for example in examples:
+            if "reasoning" in example:
+                s = f"{example['reasoning']}\n{example['answer']}"
+            else:
+                s = example["answer"]
+            
+            _image = cv2.imread(os.path.join(image_home_dir, example['name']))
+            _encoded_img = encode_image(_image)
+
+            shot_instance = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/png;base64,{_encoded_img}",
+                            },
+                        },
+                    ],
+                },
+                {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "text", "text": s},
+                    ],
+                }
+
+            ]
+            res.extend(shot_instance)
+        res.append(            {
                 "role": "user",
                 "content": [
                     {
                         "type": "text",
-                        "text": get_prompt(prompt, examples),
+                        "text": prompt,
                     },
                     {
                         "type": "image_url",
@@ -81,8 +113,13 @@ class GPT:
                         },
                     },
                 ]
-            }
-        ]
+            })
+        return res
+    
+    def query(self, prompt, image_path, examples=[]):
+        image = cv2.imread(image_path)
+        encoded_img = encode_image(image)
+        msg = self.generate_messages(prompt, encoded_img, examples)
         response = self.client.chat.completions.create(
             model=self.model,
             messages=msg,
@@ -101,17 +138,48 @@ class Claude:
     def __init__(self, api, model):
         self.client = anthropic.Client(api_key=api)
         self.model = model
+    
+    def generate_messages(self, prompt, encoded_img, examples):
+        res = []
+        for example in examples:
+            if "reasoning" in example:
+                s = f"{example['reasoning']}\n{example['answer']}"
+            else:
+                s = example["answer"]
+            
+            _image = cv2.imread(os.path.join(image_home_dir, example['name']))
+            _encoded_img = encode_image(_image)
 
-    def query(self, prompt, image_path, examples=[]):
-        image = cv2.imread(image_path)
-        encoded_img = encode_image(image)
-        msg = [
-            {
+            shot_instance = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": "image/png",
+                                "data": _encoded_img,
+                            },
+                        },
+                    ],
+                },
+                {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "text", "text": s},
+                    ],
+                }
+
+            ]
+            res.extend(shot_instance)
+        res.append(            {
                 "role": "user",
                 "content": [
                     {
                         "type": "text",
-                        "text": get_prompt(prompt, examples),
+                        "text": prompt,
                     },
                     {
                         "type": "image",
@@ -122,8 +190,13 @@ class Claude:
                         },
                     },
                 ]
-            }
-        ]
+            })
+        return res
+
+    def query(self, prompt, image_path, examples=[]):
+        image = cv2.imread(image_path)
+        encoded_img = encode_image(image)
+        msg = self.generate_messages(prompt, encoded_img, examples)
 
         response = self.client.messages.create(
             model=self.model,
@@ -147,20 +220,59 @@ class Qwen:
 
         # default processer
         self.processor = AutoProcessor.from_pretrained(model)
-
-    def query(self, prompt, image_path, examples=[]):
-        messages = [
-            {
+    
+    def generate_messages(self, prompt, image_path, examples):
+        res = []
+        for example in examples:
+            if "reasoning" in example:
+                s = f"{example['reasoning']}\n{example['answer']}"
+            else:
+                s = example["answer"]
+            shot_instance = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image",
+                            "image": os.path.join(image_home_dir, example['name']),
+                        },
+                    ],
+                },
+                {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "text", "text": s},
+                    ],
+                }
+            ]
+            res.extend(shot_instance)
+        res.append({
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": get_prompt(prompt, examples)},
+                    {"type": "text", "text": prompt},
                     {
                         "type": "image",
                         "image": image_path,
                     },
                 ],
-            }
-        ]
+            })
+        return res
+
+    def query(self, prompt, image_path, examples=[]):
+        # messages = [
+        #     {
+        #         "role": "user",
+        #         "content": [
+        #             {"type": "text", "text": get_prompt(prompt, examples)},
+        #             {
+        #                 "type": "image",
+        #                 "image": image_path,
+        #             },
+        #         ],
+        #     }
+        # ]
+        messages = self.generate_messages(prompt, image_path, examples)
 
         # Preparation for inference
         text = self.processor.apply_chat_template(
@@ -209,7 +321,7 @@ class Molmo:
     def query(self, prompt, image_path, examples=[]):
         inputs = self.processor.process(
             images=[Image.open(image_path)],
-            text=get_prompt(prompt, examples),
+            text=prompt,
         )
         inputs["images"] = inputs["images"].to(torch.bfloat16)
 
@@ -245,7 +357,7 @@ class LLAVA:
         image_tensor = [_image.to(dtype=torch.float16, device='cuda') for _image in image_tensor]
 
         conv_template = "qwen_2"  # Make sure you use correct chat template for different models
-        question = DEFAULT_IMAGE_TOKEN + "\n" + get_prompt(prompt, examples)
+        question = DEFAULT_IMAGE_TOKEN + "\n" + prompt
         conv = copy.deepcopy(conv_templates[conv_template])
         conv.append_message(conv.roles[0], question)
         conv.append_message(conv.roles[1], None)
@@ -382,11 +494,38 @@ class InternVL:
             logging.warning(name, param.device)
 
         self.tokenizer = AutoTokenizer.from_pretrained(model, trust_remote_code=True, use_fast=False)
+    
+    
+    def generate_response(self, pixel_values, prompt, examples, generation_config):
+        if len(examples) == 0:
+            response = self.model.chat(self.tokenizer, pixel_values, '<image>\n'+prompt, generation_config)
+        else:
+            pixel_values_list = []
+            num_patches_list = []
+            few_shot_prompt = ""
+            i = 1
+            for example in examples:
+                _pixel_values = load_image(os.path.join(image_home_dir, example['name']), max_num=12).to(torch.bfloat16).cuda()
+                pixel_values_list.append(_pixel_values)
+                num_patches_list.append(_pixel_values.size(0))
+                if "reasoning" in example:
+                    s = f"Image-{i}: <image>\n{example['reasoning']}\n{example['answer']}"
+                else:
+                    s = f"Image-{i}: <image>\n{example["answer"]}"
+                few_shot_prompt += s
+                i += 1
+            pixel_values_list.append(pixel_values)
+            num_patches_list.append(pixel_values.size(0))
+            final_pixel_values = torch.cat(pixel_values_list, dim=0)
+            final_prompt = few_shot_prompt + f"Image-{i}: <image>\n" + prompt + f"\nYou should only generate answer for Image-{i} given the provided examples."
+            response = self.model.chat(self.tokenizer, final_pixel_values, final_prompt, generation_config, num_patches_list=num_patches_list)   
+
+        return response
 
     def query(self, prompt, image_path, examples=[]):
         pixel_values = load_image(image_path, max_num=12).to(torch.bfloat16).cuda()
         generation_config = dict(max_new_tokens=1024, do_sample=True)
 
-        response = self.model.chat(self.tokenizer, pixel_values, '<image>\n'+get_prompt(prompt, examples), generation_config)
+        response = self.generate_response(pixel_values, prompt, examples, generation_config)
         logging.warning(response)
         return response, parse_response(response)
