@@ -1,6 +1,6 @@
 table_examples = [
     {
-        "name": "T-35-O8",
+        "name": "35/T-35-O8",
         "cot_reasoning": '''
 <thinking>
 This image contains a table. Requirements for this task include:
@@ -109,7 +109,7 @@ Now I will proceed with generating the CSV file:
 '''
     },
     {
-        "name": "T-44-O5",
+        "name": "44/T-44-O5",
         "cot_reasoning": '''
 <thinking>
 This image contains a table, so I will follow the steps for handling tables:
@@ -224,7 +224,7 @@ Now I will proceed with generating the CSV file:
 '''
     },
     {
-        "name": "T-80-O8",
+        "name": "80/T-80-O8",
         "cot_reasoning": '''
 <thinking>
 The table includes various scores, so the task steps will be as follows:
@@ -336,7 +336,7 @@ Now I will proceed with generating the CSV file:
 
 plot_examples = [
     {
-        "name": "P-28-O2",
+        "name": "28/P-28-O2",
         "cot_reasoning": '''
 <thinking>
 This image contains a histogram, so I will follow the steps for handling plots:
@@ -439,7 +439,7 @@ Now I will proceed with generating the CSV file:
 '''
     },
     {
-        "name": "P-38-O4",
+        "name": "38/P-38-O4",
         "cot_reasoning": '''
 <thinking>
 This image represents a dot plot with data points spanning different years, categorized into election years and non-election years. I will follow these steps to process the data:
@@ -540,7 +540,7 @@ Now I will proceed with generating the CSV file:
 '''
     },
     {
-        "name": "P-40-O4",
+        "name": "40/P-40-O4",
         "cot_reasoning": '''
 <thinking>
 This image contains a dot plot, so I will follow the steps for handling plots:
