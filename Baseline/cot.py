@@ -41,6 +41,8 @@ If the picture contains a plot,
 You MUST use "```csv" and "```" to enclose the CSV-formatted data. Given the feature of CSV files, you MUST pay attention to the limitation of the CSV format. For example, you MUST NOT add any spaces after the commas in the CSV file. Also, if a cell contains a comma, you MUST wrap the cell with double quotes.
 
 You should begin by enclosing all thoughts within <thinking> tags, read the image carefully and think about the requirements, including the components involved in each requirement and the specified contents to fulfill them, and how to make the estimation more accurate. Break down the requirements and estimation preparation into clear steps within <step> tags. 
+
+You should think step by step. You should first determine the CSV structure, then you should extract the column names, you should then fill in the values for each row, and finally you should replace and inspect values based on the given requirements.
 '''
 
 cot_rl_prompt = '''
@@ -94,4 +96,6 @@ Assign a quality score between 0.0 and 1.0 using <reward tags> after each reflec
 0.5-0.7: Consider minor adjustments on the requirements and preparation. 
 Below 0.5: Seriously consider backtracting and the previous requirements.
 DO NOT begin to generate the CSV until you reach a quality score of at least 0.8.
+
+You should think step by step. You should first determine the CSV structure, then you should extract the column names, you should then fill in the values for each row, and finally you should replace and inspect values based on the given requirements.
 '''
