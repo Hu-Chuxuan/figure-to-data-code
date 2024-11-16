@@ -190,7 +190,9 @@ def main(args):
                             break
                         if example_pool[i]["name"] != file_name:
                             if args.Prompt == "cot":
-                                examples.append({"answer": example_pool[i]["answer"], "reasoning": example_pool[i]["reasoning"]})
+                                examples.append({"answer": example_pool[i]["answer"], "reasoning": example_pool[i]["cot_reasoning"]})
+                            elif args.Prompt == "rl":
+                                examples.append({"answer": example_pool[i]["answer"], "reasoning": example_pool[i]["rl_reasoning"]})
                             else:
                                 examples.append({"answer": example_pool[i]["answer"]})
                     response, res = mllm.query(base_prompt, img_path, examples)
