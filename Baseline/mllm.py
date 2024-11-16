@@ -8,17 +8,18 @@ import base64
 import argparse
 import pandas as pd
 import torch
-import logging
 import torchvision.transforms as T
 from torchvision.transforms.functional import InterpolationMode
 from io import StringIO
-# from transformers import Qwen2VLForConditionalGeneration, AutoTokenizer, AutoModelForCausalLM, AutoProcessor, GenerationConfig, AutoModel
-# from qwen_vl_utils import process_vision_info
-# from llava.model.builder import load_pretrained_model
-# from llava.mm_utils import get_model_name_from_path, process_images, tokenizer_image_token
-# from llava.constants import IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_TOKEN, DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN, IGNORE_INDEX
-# from llava.conversation import conv_templates, SeparatorStyle
-from transformers import AutoTokenizer, AutoModel
+from transformers import Qwen2VLForConditionalGeneration, AutoTokenizer, AutoModelForCausalLM, AutoProcessor, GenerationConfig, AutoModel
+from qwen_vl_utils import process_vision_info
+from llava.model.builder import load_pretrained_model
+from llava.mm_utils import get_model_name_from_path, process_images, tokenizer_image_token
+from llava.constants import IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_TOKEN, DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN, IGNORE_INDEX
+from llava.conversation import conv_templates, SeparatorStyle
+import google.generativeai as genai
+import time
+import logging
 
 def encode_image(image):
     # use base64 to encode the cv2 image
@@ -44,12 +45,25 @@ def parse_response(response):
 
     return res
 
+def get_prompt(prompt, examples):
+    if len(examples) == 0:
+        return prompt
+    ex = []
+    for example in examples:
+        if "reasoning" in example:
+            s = f"{example['reasoning']}\n{example['answer']}"
+        else:
+            s = example["answer"]
+        ex.append("<example>\n" + s + "\n<\\example>")
+    demo = "\n\n".join(ex)
+    return f"{demo}\n{prompt}".strip()
+
 class GPT:
     def __init__(self, api, org, model):
         self.client = OpenAI(api_key=api, organization=org)
         self.model = model
     
-    def query(self, prompt, image_path):
+    def query(self, prompt, image_path, examples=[]):
         image = cv2.imread(image_path)
         encoded_img = encode_image(image)
         msg = [
@@ -58,7 +72,7 @@ class GPT:
                 "content": [
                     {
                         "type": "text",
-                        "text": prompt,
+                        "text": get_prompt(prompt, examples),
                     },
                     {
                         "type": "image_url",
@@ -84,11 +98,11 @@ class GPT:
         return response, parse_response(response)
 
 class Claude:
-    def __init__(self, api, org, model):
-        self.client = anthropic.Client(api_key=api, organization=org)
+    def __init__(self, api, model):
+        self.client = anthropic.Client(api_key=api)
         self.model = model
 
-    def query(self, prompt, image_path):
+    def query(self, prompt, image_path, examples=[]):
         image = cv2.imread(image_path)
         encoded_img = encode_image(image)
         msg = [
@@ -97,7 +111,7 @@ class Claude:
                 "content": [
                     {
                         "type": "text",
-                        "text": prompt,
+                        "text": get_prompt(prompt, examples),
                     },
                     {
                         "type": "image",
@@ -122,6 +136,9 @@ class Claude:
         
         return response.content[0].text, parse_response(response.content[0].text)
 
+class Gemini:
+    pass
+
 class Qwen:
     def __init__(self, model="Qwen/Qwen2-VL-72B-Instruct"):
         self.model = Qwen2VLForConditionalGeneration.from_pretrained(
@@ -131,12 +148,12 @@ class Qwen:
         # default processer
         self.processor = AutoProcessor.from_pretrained(model)
 
-    def query(self, prompt, image_path):
+    def query(self, prompt, image_path, examples=[]):
         messages = [
             {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": prompt},
+                    {"type": "text", "text": get_prompt(prompt, examples)},
                     {
                         "type": "image",
                         "image": image_path,
@@ -189,10 +206,10 @@ class Molmo:
             device_map='auto'
         )
     
-    def query(self, prompt, image_path):
+    def query(self, prompt, image_path, examples=[]):
         inputs = self.processor.process(
             images=[Image.open(image_path)],
-            text=prompt,
+            text=get_prompt(prompt, examples),
         )
         inputs["images"] = inputs["images"].to(torch.bfloat16)
 
@@ -220,29 +237,21 @@ class LLAVA:
         model_name = "llava_qwen"
         self.tokenizer, self.model, self.image_processor, self.max_length = load_pretrained_model(
                 model, None, model_name, device_map="auto")
-        # self.tokenizer, self.model, self.image_processor, self.max_length = load_pretrained_model(
-        #         model, None, model_name, device_map="auto")
         self.model.eval()
 
-    def query(self, prompt, image_path):
-        logging.warning("query debug# read image: "+image_path)
+    def query(self, prompt, image_path, examples=[]):
         image = Image.open(image_path)
-        logging.warning("query debug# process image: "+image_path)
         image_tensor = process_images([image], self.image_processor, self.model.config)
-        logging.warning("query debug# image to cuda: "+image_path)
         image_tensor = [_image.to(dtype=torch.float16, device='cuda') for _image in image_tensor]
 
         conv_template = "qwen_2"  # Make sure you use correct chat template for different models
-        question = DEFAULT_IMAGE_TOKEN + "\n" + prompt
+        question = DEFAULT_IMAGE_TOKEN + "\n" + get_prompt(prompt, examples)
         conv = copy.deepcopy(conv_templates[conv_template])
         conv.append_message(conv.roles[0], question)
         conv.append_message(conv.roles[1], None)
         prompt_question = conv.get_prompt()
 
-        logging.warning("query debug# tokenizer: "+image_path)
         input_ids = tokenizer_image_token(prompt_question, self.tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt").unsqueeze(0).to("cuda")
-        logging.warning("query debug# tokenizer end: "+image_path)
-        # input_ids = tokenizer_image_token(prompt_question, self.tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt").unsqueeze(0)
         image_sizes = [image.size]
 
         cont = self.model.generate(
@@ -253,10 +262,8 @@ class LLAVA:
             temperature=0,
             max_new_tokens=4096,
         )
-        logging.warning("query debug# generate end: "+image_path)
         text_outputs = self.tokenizer.batch_decode(cont, skip_special_tokens=True)[0]
         logging.warning(text_outputs)
-        # print(text_outputs)
 
         return text_outputs, parse_response(text_outputs)
 
@@ -376,11 +383,10 @@ class InternVL:
 
         self.tokenizer = AutoTokenizer.from_pretrained(model, trust_remote_code=True, use_fast=False)
 
-    def query(self, prompt, image_path):
+    def query(self, prompt, image_path, examples=[]):
         pixel_values = load_image(image_path, max_num=12).to(torch.bfloat16).cuda()
-        logging.warning(f"Pixel values tensor device: {pixel_values.device}")
         generation_config = dict(max_new_tokens=1024, do_sample=True)
 
-        response = self.model.chat(self.tokenizer, pixel_values, '<image>\n'+prompt, generation_config)
+        response = self.model.chat(self.tokenizer, pixel_values, '<image>\n'+get_prompt(prompt, examples), generation_config)
         logging.warning(response)
         return response, parse_response(response)

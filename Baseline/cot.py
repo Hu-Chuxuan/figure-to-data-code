@@ -40,9 +40,7 @@ If the picture contains a plot,
 
 You MUST use "```csv" and "```" to enclose the CSV-formatted data. Given the feature of CSV files, you MUST pay attention to the limitation of the CSV format. For example, you MUST NOT add any spaces after the commas in the CSV file. Also, if a cell contains a comma, you MUST wrap the cell with double quotes.
 
-You should begin by enclosing all thoughts within <thinking> tags, read the image carefully and think about the requirements, including the components involved in each requirement and the specified contents to fulfill them, and how to make the estimation more accurate. 
-Break down the requirements and estimation preparation into clear steps within <step> tags. Start with a 20 step budget, decreasing 1 budget for each fulfillment or adjustment, requesting more for complex cases if needed. 
-Use <count> tags after each step to show the remaining budget. Stop when reaching 0. 
+You should begin by enclosing all thoughts within <thinking> tags, read the image carefully and think about the requirements, including the components involved in each requirement and the specified contents to fulfill them, and how to make the estimation more accurate. Break down the requirements and estimation preparation into clear steps within <step> tags. 
 
 Continuously adjust your reasoning based on intermediate results and reflections, adapting your thoughts as you progress. 
 Regularly evaluate progress using <reflection> tags. Be critical and honest about your process. 

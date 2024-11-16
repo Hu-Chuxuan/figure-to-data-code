@@ -7,9 +7,10 @@ import json
 import pickle as pkl
 import numpy as np
 
-from Baseline.mllm import GPT, Claude, Qwen, Molmo, LLAVA, InternVL
+from Baseline.mllm import GPT, Claude, Qwen, Molmo, LLAVA, InternVL, Gemini
 from Baseline.baseline import baseline_prompt, plot_first, baseline_table, baseline_plot
 from Baseline.cot import cot_prompt
+from Baseline.examples import table_examples, plot_examples
 from PlotEvaluator import evaluate_plot, merge_perf, WrongCSVNumberError, FormatError
 from TableEvaluator import evaluate_table
 
@@ -122,22 +123,22 @@ def main(args):
         mllm = InternVL(args.model)
 
     if args.Prompt == "both":
-        prompt = baseline_prompt
+        base_prompt = baseline_prompt
         print("Using baseline prompt")
     elif args.Prompt == "table":
-        prompt = baseline_table
+        base_prompt = baseline_table
         args.types = ["Table"]
         print("Using baseline table prompt")
     elif args.Prompt == "plot":
-        prompt = baseline_plot
+        base_prompt = baseline_plot
         if "Table" in args.types:
             args.types.remove("Table")
         print("Using baseline plot prompt")
     elif args.Prompt == "cot":
-        prompt = cot_prompt
+        base_prompt = cot_prompt
         print("Using COT prompt")
     elif args.Prompt == "plot_first":
-        prompt = plot_first
+        base_prompt = plot_first
         print("Using plot first prompt")
     
     dataset = Dataset(args.root, args.types, args.paper_list)
@@ -176,7 +177,20 @@ def main(args):
                 args.resume_from = None
                 res = None
                 try:
-                    response, res = mllm.query(prompt, img_path)
+                    examples = []
+                    if data["Type"] == "Table":
+                        example_pool = table_examples
+                    else:
+                        example_pool = plot_examples
+                    for i in range(len(example_pool)):
+                        if len(examples) == args.shot:
+                            break
+                        if example_pool[i]["name"] != file_name:
+                            if args.Prompt == "cot":
+                                examples.append({"answer": example_pool[i]["answer"], "reasoning": example_pool[i]["reasoning"]})
+                            else:
+                                examples.append({"answer": example_pool[i]["answer"]})
+                    response, res = mllm.query(base_prompt, img_path, examples)
                     with open(os.path.join(args.output, str(paper), file_name+".txt"), "w") as f:
                         f.write(response)
                 except pd.errors.ParserError as e:
@@ -299,6 +313,7 @@ if __name__ == "__main__":
     parser.add_argument('--paper_list', type=int, nargs="*", help='List of paper indices')
     parser.add_argument('--Prompt', type=str, help='Prompt to use', default="both", choices=["both", "table", "plot", "cot", "plot_first"])
     parser.add_argument("--resume_from", type=str, help="First file to resume from")
+    parser.add_argument("--shot", type=int, help="Number of examples to provide to the model", default=0)
     args = parser.parse_args()
 
     main(args)
