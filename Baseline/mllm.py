@@ -511,7 +511,7 @@ class InternVL:
                 if "reasoning" in example:
                     s = f"Image-{i}: <image>\n{example['reasoning']}\n{example['answer']}"
                 else:
-                    s = f"Image-{i}: <image>\n{example["answer"]}"
+                    s = f"Image-{i}: <image>\n{example['answer']}"
                 few_shot_prompt += s
                 i += 1
             pixel_values_list.append(pixel_values)
