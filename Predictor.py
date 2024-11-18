@@ -113,14 +113,14 @@ def main(args):
         mllm = Claude(args.api, args.model)
     elif "gemini" in args.model.lower():
         mllm = Gemini(args.api, args.model)
-    elif "qwen" in args.model.lower():
-        mllm = Qwen(args.model)
     elif "molmo" in args.model.lower():
         mllm = Molmo(args.model)
     elif "llava" in args.model.lower():
         mllm = LLAVA(args.model)
     elif "internvl" in args.model.lower():
         mllm = InternVL(args.model)
+    elif "qwen" in args.model.lower():
+        mllm = Qwen(args.model)
 
     if args.Prompt == "both":
         base_prompt = baseline_prompt
@@ -190,11 +190,11 @@ def main(args):
                             break
                         if example_pool[i]["name"] != file_name:
                             if args.Prompt == "cot":
-                                examples.append({"answer": example_pool[i]["answer"], "reasoning": example_pool[i]["cot_reasoning"]})
+                                examples.append({"answer": example_pool[i]["answer"], "reasoning": example_pool[i]["cot_reasoning"], "name": example_pool[i]["name"]})
                             elif args.Prompt == "rl":
-                                examples.append({"answer": example_pool[i]["answer"], "reasoning": example_pool[i]["rl_reasoning"]})
+                                examples.append({"answer": example_pool[i]["answer"], "reasoning": example_pool[i]["rl_reasoning"], "name": example_pool[i]["name"]})
                             else:
-                                examples.append({"answer": example_pool[i]["answer"]})
+                                examples.append({"answer": example_pool[i]["answer"], "name": example_pool[i]["name"]})
                     response, res = mllm.query(base_prompt, img_path, examples)
                     with open(os.path.join(args.output, str(paper), file_name+".txt"), "w") as f:
                         f.write(response)
