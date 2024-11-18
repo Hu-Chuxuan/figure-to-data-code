@@ -70,7 +70,7 @@ def find_image(image_home_dir, paper_id, name):
     for root, _, files in os.walk(subdir_path):
         for file_name in files:
             # Check if the file starts with the name (e.g., 'T-35-O8')
-            if file_name.startswith(name):
+            if file_name.startswith(name) and not file_name.endswith('.csv'):
                 # Return the full path of the file
                 return os.path.join(root, file_name)
     
