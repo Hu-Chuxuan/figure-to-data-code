@@ -24,7 +24,7 @@ for ((i=0; i<num_partitions; i++)); do
     cat <<EOL > $script_name
 #!/bin/bash
 #SBATCH --nodes=1
-#SBATCH --job-name=0-$i-qwen-72b
+#SBATCH --job-name=2-$i-qwen-72b
 #SBATCH --mail-user=chuxuan3@illinois.edu
 #SBATCH --mail-type=BEGIN,END
 #SBATCH --partition=secondary
@@ -38,8 +38,8 @@ nvidia-smi
 echo "CUDA availability in PyTorch:"
 python -c "import torch; print('CUDA available:', torch.cuda.is_available())"
 
-mkdir -p ../output/Qwen-72B-0-Shot-COT
-python Predictor.py --root ../figure-to-data --output ../output/Qwen-72B-0-Shot-COT --model Qwen/Qwen2-VL-72B-Instruct --Prompt cot --shot 0 --paper_list $paper_list
+mkdir -p ../output/Qwen-72B-2-Shot-COT
+python Predictor.py --root ../figure-to-data --output ../output/Qwen-72B-2-Shot-COT --model Qwen/Qwen2-VL-72B-Instruct --Prompt cot --shot 2 --paper_list $paper_list
 EOL
 
     # Submit the Slurm script
