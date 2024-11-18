@@ -61,6 +61,15 @@ def get_prompt(prompt, examples):
     demo = "\n\n".join(ex)
     return f"{demo}\n{prompt}".strip()
 
+def find_image(image_home_dir, base_name):
+    # List all files in the directory
+    for file_name in os.listdir(image_home_dir):
+        # Check if the file starts with the base name (e.g., 'T-35-O8')
+        if file_name.startswith(base_name):
+            # Return the full path of the file
+            return os.path.join(image_home_dir, file_name)
+    return None
+
 class GPT:
     def __init__(self, api, org, model):
         self.client = OpenAI(api_key=api, organization=org)
@@ -74,7 +83,7 @@ class GPT:
             else:
                 s = example["answer"]
             
-            _image = cv2.imread(os.path.join(image_home_dir, example['name']))
+            _image = cv2.imread(find_image(image_home_dir, example['name']))
             _encoded_img = encode_image(_image)
 
             shot_instance = [
@@ -147,7 +156,7 @@ class Claude:
             else:
                 s = example["answer"]
             
-            _image = cv2.imread(os.path.join(image_home_dir, example['name']))
+            _image = cv2.imread(find_image(image_home_dir, example['name']))
             _encoded_img = encode_image(_image)
 
             shot_instance = [
@@ -235,7 +244,7 @@ class Qwen:
                         {"type": "text", "text": prompt},
                         {
                             "type": "image",
-                            "image": os.path.join(image_home_dir, example['name']),
+                            "image": find_image(image_home_dir, example['name']),
                         },
                     ],
                 },
@@ -505,7 +514,7 @@ class InternVL:
             few_shot_prompt = ""
             i = 1
             for example in examples:
-                _pixel_values = load_image(os.path.join(image_home_dir, example['name']), max_num=12).to(torch.bfloat16).cuda()
+                _pixel_values = load_image(find_image(image_home_dir, example['name']), max_num=12).to(torch.bfloat16).cuda()
                 pixel_values_list.append(_pixel_values)
                 num_patches_list.append(_pixel_values.size(0))
                 if "reasoning" in example:
