@@ -61,13 +61,19 @@ def get_prompt(prompt, examples):
     demo = "\n\n".join(ex)
     return f"{demo}\n{prompt}".strip()
 
-def find_image(image_home_dir, base_name):
-    # List all files in the directory
-    for file_name in os.listdir(image_home_dir):
-        # Check if the file starts with the base name (e.g., 'T-35-O8')
-        if file_name.startswith(base_name):
-            # Return the full path of the file
-            return os.path.join(image_home_dir, file_name)
+def find_image(image_home_dir, paper_id, name):
+    subdir_path = os.path.join(image_home_dir, paper_id)
+    if not os.path.exists(subdir_path):
+        return None
+    
+    # Traverse the subdirectory
+    for root, _, files in os.walk(subdir_path):
+        for file_name in files:
+            # Check if the file starts with the name (e.g., 'T-35-O8')
+            if file_name.startswith(name):
+                # Return the full path of the file
+                return os.path.join(root, file_name)
+    
     return None
 
 class GPT:
@@ -83,7 +89,7 @@ class GPT:
             else:
                 s = example["answer"]
             
-            _image = cv2.imread(find_image(image_home_dir, example['name']))
+            _image = cv2.imread(find_image(image_home_dir, example['paper_id'], example['name']))
             _encoded_img = encode_image(_image)
 
             shot_instance = [
@@ -156,7 +162,7 @@ class Claude:
             else:
                 s = example["answer"]
             
-            _image = cv2.imread(find_image(image_home_dir, example['name']))
+            _image = cv2.imread(find_image(image_home_dir, example['paper_id'], example['name']))
             _encoded_img = encode_image(_image)
 
             shot_instance = [
@@ -244,7 +250,7 @@ class Qwen:
                         {"type": "text", "text": prompt},
                         {
                             "type": "image",
-                            "image": find_image(image_home_dir, example['name']),
+                            "image": find_image(image_home_dir, example['paper_id'], example['name']),
                         },
                     ],
                 },
@@ -514,7 +520,7 @@ class InternVL:
             few_shot_prompt = ""
             i = 1
             for example in examples:
-                _pixel_values = load_image(find_image(image_home_dir, example['name']), max_num=12).to(torch.bfloat16).cuda()
+                _pixel_values = load_image(find_image(image_home_dir, example['paper_id'], example['name']), max_num=12).to(torch.bfloat16).cuda()
                 pixel_values_list.append(_pixel_values)
                 num_patches_list.append(_pixel_values.size(0))
                 if "reasoning" in example:

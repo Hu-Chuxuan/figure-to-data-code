@@ -190,11 +190,11 @@ def main(args):
                             break
                         if example_pool[i]["name"] != file_name:
                             if args.Prompt == "cot":
-                                examples.append({"answer": example_pool[i]["answer"], "reasoning": example_pool[i]["cot_reasoning"], "name": example_pool[i]["name"]})
+                                examples.append({"answer": example_pool[i]["answer"], "reasoning": example_pool[i]["cot_reasoning"], "name": example_pool[i]["name"].split("/")[-1], "paper_id": example_pool[i]["name"].split("/")[0]})
                             elif args.Prompt == "rl":
-                                examples.append({"answer": example_pool[i]["answer"], "reasoning": example_pool[i]["rl_reasoning"], "name": example_pool[i]["name"]})
+                                examples.append({"answer": example_pool[i]["answer"], "reasoning": example_pool[i]["rl_reasoning"], "name": example_pool[i]["name"].split("/")[-1], "paper_id": example_pool[i]["name"].split("/")[0]})
                             else:
-                                examples.append({"answer": example_pool[i]["answer"], "name": example_pool[i]["name"]})
+                                examples.append({"answer": example_pool[i]["answer"], "name": example_pool[i]["name"].split("/")[-1], "paper_id": example_pool[i]["name"].split("/")[0]})
                     response, res = mllm.query(base_prompt, img_path, examples)
                     with open(os.path.join(args.output, str(paper), file_name+".txt"), "w") as f:
                         f.write(response)
