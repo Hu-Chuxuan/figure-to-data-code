@@ -1,9 +1,9 @@
 #!/bin/bash
 #SBATCH --nodes=1
-#SBATCH --job-name=0-molmo-72b-ddkang
+#SBATCH --job-name=0-molmo-72b
 #SBATCH --mail-user=chuxuan3@illinois.edu
 #SBATCH --mail-type=BEGIN,END
-#SBATCH --partition=ddkang
+#SBATCH --partition=secondary
 #SBATCH --ntasks-per-node=3
 #SBATCH --gres=gpu:H100:3
 #SBATCH --time=04:00:00
