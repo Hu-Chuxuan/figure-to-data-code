@@ -25,14 +25,14 @@ for ((i=0; i<num_partitions; i++)); do
         cat <<EOL > $script_name
 #!/bin/bash
 #SBATCH --nodes=1
-#SBATCH --job-name=special-$i-internvl-76b
+#SBATCH --job-name=0-$i-internvl-76b
 #SBATCH --mail-user=chuxuan3@illinois.edu
 #SBATCH --mail-type=BEGIN,END
 #SBATCH --partition=secondary
-#SBATCH --ntasks-per-node=2
-#SBATCH --gres=gpu:H100:2
-#SBATCH --time=06:00:00
-#SBATCH --mem=200G
+#SBATCH --ntasks-per-node=3
+#SBATCH --gres=gpu:H100:4
+#SBATCH --time=04:00:00
+#SBATCH --mem=320G
 
 echo "Checking GPU availability..."
 nvidia-smi
@@ -42,8 +42,8 @@ python -c "import torch; print('CUDA available:', torch.cuda.is_available())"
 conda init
 conda activate internvl-76b-env
 
-mkdir -p ../output/InternVL2-76B-Special
-python Predictor.py --root ../figure-to-data --output ../output/InternVL2-76B-Special --model OpenGVLab/InternVL2-Llama3-76B --Prompt cot --shot 0 --types Table --paper_list 18 19 20 21 22 23 24 25 26 27 28 29 30 31
+mkdir -p ../output/InternVL2-76B-0-Shot-COT
+python Predictor.py --root ../figure-to-data --output ../output/InternVL2-0-Shot-COT --model OpenGVLab/InternVL2-Llama3-76B --Prompt cot --shot 0 --types Table --paper_list 18 19 20 21 22 23 24 25 26 27 28 29 30 31
 EOL
 
     # Submit the special Slurm script for i=0
