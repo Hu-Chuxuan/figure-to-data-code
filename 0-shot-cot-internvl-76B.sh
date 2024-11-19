@@ -38,6 +38,7 @@ nvidia-smi
 echo "CUDA availability in PyTorch:"
 python -c "import torch; print('CUDA available:', torch.cuda.is_available())"
 
+conda init
 conda activate internvl-76b-env
 
 mkdir ../output/InternVL2-76B-0-Shot-COT
