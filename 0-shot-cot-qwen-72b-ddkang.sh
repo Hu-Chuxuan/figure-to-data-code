@@ -1,12 +1,12 @@
 #!/bin/bash
 #SBATCH --nodes=1
-#SBATCH --job-name=0-qwen-72b
+#SBATCH --job-name=0-qwen-72b-secondary
 #SBATCH --mail-user=chuxuan3@illinois.edu
 #SBATCH --mail-type=BEGIN,END
-#SBATCH --partition=ddkang
+#SBATCH --partition=secondary
 #SBATCH --ntasks-per-node=3
 #SBATCH --gres=gpu:H100:3
-#SBATCH --time=24:00:00
+#SBATCH --time=04:00:00
 #SBATCH --mem=240G
 
 echo "Checking GPU availability..."
