@@ -38,12 +38,3 @@ df = subplots2csv(subplots)
 # NOTE 
 
 To run InternVL models, modify the `modeling_internvl_chat.py` files to remove the `return_dict` argument in the `self.language_model.generate` function.
-
-# TODO
-
-- [ ] Clean image (``ImageCleaner.py: ImageCleaner``) and estimate axes (``SubplotConstructor.py: SubplotConstructor``)
-- [ ] Estimate data points
-    - [ ] Dot points (``Subplot.py: DotPlot``)
-    - [ ] Histogram (``Subplot.py: Histogram``)
-    - [ ] Continuous curves (``Subplot.py: Continuous``)
-- [ ] Organize data points and output CSV files
